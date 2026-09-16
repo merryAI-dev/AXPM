@@ -50,7 +50,7 @@ Gmail 읽기는 제한된 OAuth 범위에 해당한다. 테스트 사용자 범�
 
 ## 실제 에이전트
 
-`ANTHROPIC_API_KEY`와 계정에서 사용할 수 있는 `AGENT_MODEL`을 설정한다. 모델 이름은 하드코딩하지 않는다. 코드에는 실제 Claude Messages API의 도구 호출 루프가 있으며 키가 없으면 에이전트 실행 버튼을 비활성화한다. 임의의 고정 답변을 AI 응답으로 표시하지 않는다.
+`npm run hermes:setup`으로 Hermes를 설치하고 `.env.local`에 `AGENT_ENGINE=hermes`, `AGENT_PROVIDER=gemini`, `GEMINI_API_KEY`, 계정에서 사용할 수 있는 `AGENT_MODEL`, `HERMES_BIN` 절대 경로를 설정한다. [Hermes + Gemini 안내](HERMES.md)를 참고한다. 키·모델이 없으면 실행 버튼을 비활성화하고 API는 503을 반환한다. 다른 모델이나 고정 답변으로 대체하지 않는다.
 
 에이전트는 운영 현황·기업별 근거·업무 메일·캘린더를 선택적으로 읽고, 메일·일정·티켓 조정안을 작성하거나 보고서 초안을 저장한다. 사용자의 최근 대화 요약과 요청을 다음 대화에 전달한다. 단계별 도구 사용과 최종 보고를 Firestore에 저장한다. 실행 권한은 모델에게 주지 않는다.
 

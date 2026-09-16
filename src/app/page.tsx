@@ -1062,7 +1062,7 @@ export default function Home() {
                   <div className="userMessage">{r.goal}</div>
                   <div className="agentMessage">
                     <small>
-                      AXPM AGENT ·{" "}
+                      {r.engine || "builtin"} · {r.provider || "모델 미기록"} ·{" "}
                       {r.status === "running"
                         ? "확인 중"
                         : r.status === "failed"
@@ -1107,8 +1107,8 @@ export default function Home() {
               <div>
                 <small>
                   {state?.agentConfigured
-                    ? "실제 모델 연결 · 변경은 승인 후 실행"
-                    : "API 키·모델 설정 후 실제 에이전트 실행"}
+                    ? "Hermes 실행 설정됨 · 변경은 승인 후 실행"
+                    : "Gemini 키·모델 설정 후 Hermes 실행"}
                 </small>
                 <button
                   className="primary"

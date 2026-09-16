@@ -48,3 +48,5 @@ Google OAuth/Gmail/Drive live calls, native Google Sheets live writes, a live An
 - 단위 테스트 22개, TypeScript 검사, Next production build 통과. Drive 버전이 읽는 동안 바뀌는 경우 읽기만 제한적으로 재시도하며 쓰기는 재실행하지 않는 회귀 테스트를 포함한다.
 
 운영 GCP 프로젝트, Firestore 데이터베이스, Firebase Web App, 런타임 서비스 계정은 생성했다. Cloud Run/정기 실행은 결제 계정 선택과 연결이 남아 있으며 아직 배포하지 않았다. Gemini 실호출은 API 키·모델 지정 후 검증해야 한다. Gmail/Calendar 사용자 OAuth는 연결되지 않았다.
+
+Hermes 자체의 `mcp test axpm`도 실제 HTTP 연결과 13개 도구 탐색에 성공했다. Gemini 모델 응답을 시험한 것은 아니다. 컨테이너 빌드는 외부 레지스트리 ghcr.io TLS handshake timeout으로 첫 시도가 실패했으며 Next production build 성공과 구분한다.
