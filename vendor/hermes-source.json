@@ -4,5 +4,9 @@
   "archiveSha256": "1a01d798b4ad9c0c2037d94f53d5d3b24b9eb2af56b221395198eb875c3e7807",
   "sourceDirectory": "vendor/hermes-agent",
   "sourceModified": false,
-  "sourceFileCount": 13490
+  "sourceFileCount": 13490,
+  "gitNormalization": {
+    "files": 18,
+    "description": "CRLF to LF for PowerShell files under upstream attributes; no code or executable-mode changes"
+  }
 }

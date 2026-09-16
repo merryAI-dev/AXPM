@@ -61,4 +61,4 @@ GCP 프로젝트에서 Generative Language/API Keys API를 활성화하고, 별�
 
 ## FDE 인수인계 · Hermes 소스 포함
 
-사용자 요청에 따라 배포 작업을 중단하고 Hermes 원본 소스 13,490개 파일을 `vendor/hermes-agent`에 직접 포함했다. 원본 압축 파일과 전체 파일 내용·Git blob·실행 권한을 비교했다. 차이 0개이며 라이선스와 출처를 보존한다. 실제 설치도 이 소스로 전환했다. 전환 후 Next production build와 API → Hermes → Gemini → MCP → 합성 C3/B11 조회 검증을 다시 통과했다. upstream 전체 테스트를 실행했다는 의미는 아니다. 배포 코드는 보존하지만 Cloud Run 배포 및 최종 컨테이너 검증은 이번 범위에서 제외했다.
+사용자 요청에 따라 배포 작업을 중단하고 Hermes 원본 소스 13,490개 파일을 `vendor/hermes-agent`에 직접 포함했다. 원본 압축 파일과 전체 파일 내용·Git blob·실행 권한을 비교했다. 작업 트리의 13,490개 파일 내용은 원본과 일치한다. Git에 저장할 때 upstream 속성에 따라 PowerShell 파일 18개의 줄바꿈이 CRLF에서 LF로 정규화됐으며, 그 외 blob 내용과 모든 실행 권한은 일치한다. 라이선스와 출처를 보존한다. 실제 설치도 이 소스로 전환했다. 전환 후 Next production build와 API → Hermes → Gemini → MCP → 합성 C3/B11 조회 검증을 다시 통과했다. upstream 전체 테스트를 실행했다는 의미는 아니다. 배포 코드는 보존하지만 Cloud Run 배포 및 최종 컨테이너 검증은 이번 범위에서 제외했다.
