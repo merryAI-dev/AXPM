@@ -50,3 +50,10 @@ Google OAuth/Gmail/Drive live calls, native Google Sheets live writes, a live An
 운영 GCP 프로젝트, Firestore 데이터베이스, Firebase Web App, 런타임 서비스 계정은 생성했다. Cloud Run/정기 실행은 결제 계정 선택과 연결이 남아 있으며 아직 배포하지 않았다. Gemini 실호출은 API 키·모델 지정 후 검증해야 한다. Gmail/Calendar 사용자 OAuth는 연결되지 않았다.
 
 Hermes 자체의 `mcp test axpm`도 실제 HTTP 연결과 13개 도구 탐색에 성공했다. Gemini 모델 응답을 시험한 것은 아니다. 컨테이너 빌드는 외부 레지스트리 ghcr.io TLS handshake timeout으로 첫 시도가 실패했으며 Next production build 성공과 구분한다.
+
+
+## 2026-09-16 · Gemini 실호출 완료
+
+GCP 프로젝트에서 Generative Language/API Keys API를 활성화하고, 별도 Gemini 실행 계정에 바인딩된 Gemini 전용 인증 키를 발급했다. 키 값은 출력하거나 Git에 넣지 않았다. 실제 모델 목록과 Hermes의 Gemini 응답을 확인했다.
+
+`npx tsx scripts/check-hermes.ts --live` 통과: 별도 Firebase 테스트 계정으로 합성 XLSX 업로드 → `/api/bridge` 호출 → Hermes + `gemini-3.8-flash` → HTTP MCP 목록/시트/셀 조회 → C3=`합성기업`, B11=`기존 논의` 최종 답변. 실제 MCP 응답 4개를 확인했고 변경 제안이 생성되지 않았음을 검사했다. 테스트 사용자·데이터·연결 키는 정리했다. 앞 절의 Gemini 미연결 상태는 이 검증으로 해소됐다. Cloud Run 배포와 Gmail/Calendar OAuth는 여전히 미완료다.

@@ -42,6 +42,14 @@ run("uv", [
   `${repo}[mcp]`,
 ]);
 run("npm", ["run", "agent:setup"]);
+const envPath = ".env.local";
+const localEnv = await readFile(envPath, "utf8");
+await writeFile(
+  envPath,
+  localEnv.replace(/^HERMES_BIN=.*\r?\n?/gm, "").trimEnd() +
+    `\nHERMES_BIN=${JSON.stringify(`${repo}/.venv/bin/hermes`)}\n`,
+  { mode: 0o600 },
+);
 const connection = JSON.parse(
   await readFile("private/agent-runtime.json", "utf8"),
 );

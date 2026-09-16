@@ -29,7 +29,7 @@ http://localhost:3000 에서 로컬 검증 계정으로 시작한다. Node 22+, 
 
 ## 연결 상태와 범위
 
-Firebase 에뮬레이터에서 실제 파일 가져오기·저장·보고서 다운로드를 검증했다. GCP 프로젝트·Firestore·Firebase Web App·런타임 서비스 계정은 생성했고, 공유된 Drive/Sheets의 실제 CRUD를 검증했다. Cloud Run은 결제 연결 대기, Gemini는 키·모델 설정 대기다. Gmail/Calendar는 별도 사용자 OAuth 동의가 필요하다. 키가 없을 때 AI 응답을 흉내 내지 않는다.
+Firebase 에뮬레이터에서 실제 파일 가져오기·저장·보고서 다운로드를 검증했다. GCP 프로젝트·Firestore·Firebase Web App·런타임 서비스 계정은 생성했고, 공유된 Drive/Sheets의 실제 CRUD를 검증했다. Cloud Run은 결제 연결 대기다. 로컬 Hermes + Gemini는 전용 인증 키로 연결했고 API → MCP → 실제 셀 조회 → 최종 응답을 검증했다. Gmail/Calendar는 별도 사용자 OAuth 동의가 필요하다. 키가 없을 때 AI 응답을 흉내 내지 않는다.
 
 Drive의 XLSX와 Google Sheets는 지정 셀 변경을 제안·승인·백업·저장·재조회한다. 잔여 티켓은 사용자가 확정하는 별도 원장이며 신청만으로 자동 차감하지 않는다. 특화 완료 표시는 시간 단위 시수와 다르다. 기존 템플릿 사진과 인쇄 서식은 그대로 유지되며 사진 교체·자동 행 높이 조정은 지원하지 않는다. 정산 기능은 후속 확장 범위다.
 
