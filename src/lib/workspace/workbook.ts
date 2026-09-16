@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { workbookView } from "./workbook-view";
 import { createHash } from "node:crypto";
 import { patchWorkbook } from "../template";
 import {
@@ -12,6 +13,7 @@ export const fingerprint = (buffer: Buffer) =>
 export async function readWorkbook(
   buffer: Buffer,
   selected?: { sheet: string; mapping: Mapping },
+  preview = false,
 ) {
   if (buffer.length > 10_000_000)
     throw new Error("파일은 10MB 이하여야 합니다.");
@@ -36,7 +38,22 @@ export async function readWorkbook(
       if (c.type === ExcelJS.ValueType.Formula) formulas.push(field.key);
     }
   }
-  return { sheets, values, anchors, formulas, version: fingerprint(buffer) };
+  return {
+    sheets,
+    values,
+    anchors,
+    formulas,
+    version: fingerprint(buffer),
+    ...(preview
+      ? {
+          view: workbookView(
+            w,
+            selected?.sheet || sheets[0]?.name,
+            selected?.mapping || [],
+          ),
+        }
+      : {}),
+  };
 }
 export async function editWorkbook(
   buffer: Buffer,

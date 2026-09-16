@@ -93,9 +93,15 @@ export async function workspaceApi(
   }
   if (path === "drive/read" && !get) {
     const p = z
-      .object({ fileId: idSchema, selected: editSchema.optional() })
+      .object({
+        fileId: idSchema,
+        selected: editSchema.optional(),
+        preview: z.boolean().default(false),
+      })
       .parse(await request.json());
-    return json(await (await workspace(uid)).read(p.fileId, p.selected));
+    return json(
+      await (await workspace(uid)).read(p.fileId, p.selected, p.preview),
+    );
   }
   if (path === "drive/profile" && !get) {
     const p = z
@@ -141,9 +147,13 @@ export async function workspaceApi(
   }
   if (path === "workbooks/read" && !get) {
     const p = z
-      .object({ id: z.string().uuid(), selected: editSchema.optional() })
+      .object({
+        id: z.string().uuid(),
+        selected: editSchema.optional(),
+        preview: z.boolean().default(false),
+      })
       .parse(await request.json());
-    return json(await readLocal(uid, p.id, p.selected));
+    return json(await readLocal(uid, p.id, p.selected, p.preview));
   }
   if (path === "workbooks/save" && !get) {
     const raw = await request.json(),

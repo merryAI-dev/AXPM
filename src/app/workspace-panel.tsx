@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
+import WorkbookViewer from "./workbook-viewer";
+import type { SheetView } from "@/lib/workspace/sheet-view";
 import { defaultMapping, fieldLabels } from "@/lib/report-fields";
 import {
   FOLDER,
@@ -17,6 +19,7 @@ type LocalFile = {
   updatedAt: string;
 };
 type EditorData = {
+  view?: SheetView;
   file: { id: string; name: string; mimeType?: string };
   version: string;
   sheets: { name: string; rows: number; columns: number }[];
@@ -594,8 +597,8 @@ export function WorkbookEditor({
     mapping: Mapping;
   }): Promise<EditorData> {
     return source === "local"
-      ? api("workbooks/read", { id, selected })
-      : api("drive/read", { fileId: id, selected });
+      ? api("workbooks/read", { id, selected, preview: !!selected })
+      : api("drive/read", { fileId: id, selected, preview: !!selected });
   }
   async function act(fn: () => Promise<void>) {
     setBusy(true);
@@ -618,15 +621,25 @@ export function WorkbookEditor({
       let profile = d.profile;
       if (source === "drive")
         profile = await api(`drive/profile?id=${encodeURIComponent(id)}`);
-      setSheet(profile?.sheet || d.sheets[0]?.name || "");
-      if (profile) setMapping(profile.mapping);
+      if (epoch !== requestEpoch.current) return;
+      const selected = {
+        sheet: profile?.sheet || d.sheets[0]?.name || "",
+        mapping: profile?.mapping || initialMapping(),
+      };
+      setSheet(selected.sheet);
+      setMapping(selected.mapping);
+      const loaded = await read(selected);
+      if (epoch !== requestEpoch.current) return;
+      setData(loaded);
+      setBefore(loaded.values);
+      setValues(loaded.values);
+      setLoadedKey(JSON.stringify(selected));
     });
     return () => {
       requestEpoch.current++;
     };
   }, [id, source]);
-  async function load() {
-    const selected = { sheet, mapping };
+  async function load(selected = { sheet, mapping }) {
     const d = await read(selected);
     setData(d);
     setBefore(d.values);
@@ -690,9 +703,80 @@ export function WorkbookEditor({
           {notice}
         </p>
       )}
-      <section className="panel">
+      <div className="documentSheetPicker">
+        <label>
+          시트
+          <select
+            aria-label="보고서 시트"
+            value={sheet}
+            disabled={busy}
+            onChange={(e) => {
+              if (
+                changes.length &&
+                readReady &&
+                !window.confirm("저장하지 않은 변경을 닫고 시트를 바꿀까요?")
+              )
+                return;
+              const nextSheet = e.target.value;
+              setSheet(nextSheet);
+              setReview(false);
+              act(() => load({ sheet: nextSheet, mapping }));
+            }}
+          >
+            {data?.sheets.map((s) => (
+              <option key={s.name}>{s.name}</option>
+            ))}
+          </select>
+        </label>
+        <span className="hint">
+          {busy
+            ? "원본 문서를 읽고 있어요…"
+            : "문서에서 수정할 셀을 선택하세요"}
+        </span>
+      </div>
+      {readReady && data?.view ? (
+        <WorkbookViewer
+          view={data.view}
+          mapping={mapping}
+          values={values}
+          before={before}
+          anchors={data.anchors}
+          formulas={data.formulas}
+          busy={busy}
+          onChange={(key, value) => {
+            setValues((prev) => ({ ...prev, [key]: value }));
+            setReview(false);
+          }}
+        />
+      ) : (
+        <div className="panel emptyState">
+          <p>
+            {busy
+              ? "문서를 불러오는 중…"
+              : "매핑 설정에서 시트와 셀을 읽어주세요."}
+          </p>
+        </div>
+      )}
+      {readReady && (
+        <div className="documentSaveBar">
+          <span>
+            {changes.length
+              ? `수정한 셀 ${changes.length}개 · 아직 저장하지 않았어요`
+              : "저장된 원본을 보고 있어요"}
+          </span>
+          <button
+            className="primary"
+            disabled={busy || !changes.length}
+            onClick={() => setReview(true)}
+          >
+            변경 {changes.length}개 확인
+          </button>
+        </div>
+      )}
+      <details className="panel documentMapping">
+        <summary>셀 매핑 설정 · {mapping.length}개 항목</summary>
         <div className="panelTitle">
-          <h2>1. 시트와 셀 지정</h2>
+          <h2>시트와 셀 지정</h2>
           <span className="badge">파일별 매핑</span>
         </div>
         <p>
@@ -770,7 +854,7 @@ export function WorkbookEditor({
           <button
             className="primary"
             disabled={busy || !sheet}
-            onClick={() => act(load)}
+            onClick={() => act(() => load())}
           >
             {busy ? "읽는 중…" : "지정한 셀 읽기"}
           </button>
@@ -789,58 +873,10 @@ export function WorkbookEditor({
             </button>
           )}
         </div>
-      </section>
-      <section className="panel">
-        <h2>2. 내용 편집</h2>
-        {!readReady ? (
-          <div className="emptyState">
-            <p>시트와 셀을 지정하고 ‘지정한 셀 읽기’를 눌러주세요.</p>
-          </div>
-        ) : (
-          <>
-            <div className="editorFields">
-              {mapping.map((f) => {
-                const blocked =
-                  data?.formulas.includes(f.key) ||
-                  data?.anchors[f.key] !== f.cell;
-                return (
-                  <label key={f.key}>
-                    {f.label}
-                    <small>
-                      {sheet}!{f.cell}
-                      {blocked && " · 수식/병합 셀: 주소를 확인해주세요"}
-                    </small>
-                    <textarea
-                      disabled={busy || blocked}
-                      rows={
-                        f.key === "discussion" ||
-                        (values[f.key]?.length || 0) > 120
-                          ? 5
-                          : 2
-                      }
-                      value={values[f.key] || ""}
-                      onChange={(e) => {
-                        setValues({ ...values, [f.key]: e.target.value });
-                        setReview(false);
-                      }}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-            <button
-              className="primary"
-              disabled={busy || !changes.length}
-              onClick={() => setReview(true)}
-            >
-              변경 {changes.length}개 확인
-            </button>
-          </>
-        )}
-      </section>
+      </details>
       {review && readReady && (
         <section className="panel">
-          <h2>3. 변경 내용 확인</h2>
+          <h2>변경 내용 확인</h2>
           <div className="diffList">
             {changes.map((f) => (
               <article key={f.key}>

@@ -13,7 +13,10 @@ import {
   type Mapping,
 } from "./schema";
 import { readWorkbook } from "./workbook";
+import type { SheetView } from "./sheet-view";
+import { nativeSheetView } from "./native-sheet-view";
 export interface DrivePort {
+  preview?(id: string, sheet: string, mapping: Mapping): Promise<SheetView>;
   metadata(id: string): Promise<DriveFile>;
   list(
     parent: string,
@@ -69,6 +72,14 @@ export async function googleDrivePort(uid: string): Promise<DrivePort> {
   const drive = google.drive({ version: "v3", auth, timeout: 30000 });
   const sheets = google.sheets({ version: "v4", auth, timeout: 30000 });
   return {
+    async preview(id, sheet, mapping) {
+      const { data } = await sheets.spreadsheets.get({
+        spreadsheetId: id,
+        ranges: [cellRange(sheet, "A1:BH500")],
+        includeGridData: true,
+      });
+      return nativeSheetView(data, sheet, mapping);
+    },
     async metadata(id) {
       return normalize(
         (await drive.files.get({ fileId: id, fields, supportsAllDrives: true }))
@@ -265,12 +276,16 @@ export class DriveWorkspace {
     const folder = await this.folder(parent);
     return { folder, ...(await this.port.list(parent, pageToken, trashed)) };
   }
-  async read(id: string, selected?: { sheet: string; mapping: Mapping }) {
+  async read(
+    id: string,
+    selected?: { sheet: string; mapping: Mapping },
+    preview = false,
+  ) {
     // Drive may advance metadata revisions while processing an uploaded XLSX.
     // Re-read a changing document; never retry a write or return mixed revisions.
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        return await this.readRevision(id, selected);
+        return await this.readRevision(id, selected, preview);
       } catch (e) {
         if (!(e instanceof ReadRevisionChanged) || attempt === 2) throw e;
       }
@@ -280,14 +295,28 @@ export class DriveWorkspace {
   private async readRevision(
     id: string,
     selected?: { sheet: string; mapping: Mapping },
+    preview = false,
   ) {
     const file = await this.scoped(id);
     let result;
     if (file.mimeType === XLSX)
-      result = await readWorkbook(await this.port.download(id), selected);
+      result = await readWorkbook(
+        await this.port.download(id),
+        selected,
+        preview,
+      );
     else if (file.mimeType === SHEET)
       result = {
         sheets: await this.port.sheets(id),
+        ...(preview && selected && this.port.preview
+          ? {
+              view: await this.port.preview(
+                id,
+                selected.sheet,
+                selected.mapping,
+              ),
+            }
+          : {}),
         ...(selected
           ? await this.port.readCells(id, selected.sheet, selected.mapping)
           : { values: {}, anchors: {}, formulas: [] }),

@@ -46,10 +46,11 @@ export async function readLocal(
   uid: string,
   id: string,
   selected?: { sheet: string; mapping: Mapping },
+  preview = false,
 ) {
   const { file, buffer } = await localWorkbook(uid, id);
   return {
-    ...(await readWorkbook(buffer, selected)),
+    ...(await readWorkbook(buffer, selected, preview)),
     file: { id, name: file.name },
     profile: file.profile || null,
   };

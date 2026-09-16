@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "kind": "markdown",
+  "output": "../private/hwpx/monitor-report.hwpx",
+  "markdown": "# 멘토링 운영 점검\n\n## 검증 목적\n\n합성기업의 한글 문서 생성 경로를 검증한다.\n\n## 확인 항목\n\n- 신청 시트의 근거와 보고서의 셀 값을 대조한다.\n- 외부 발송은 운영자의 승인 후 진행한다.\n",
+  "template": "report",
+  "quality": {"hancom": "off", "required_text": ["합성기업", "운영자의 승인"]},
+  "metadata_date": "2026-09-16"
+}

@@ -21,3 +21,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+
+# Customer Hangul documents and generated document artifacts
+*.hwp
+*.hwpx

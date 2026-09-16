@@ -1229,3 +1229,289 @@ select {
     animation: none !important;
   }
 }
+
+/* Document-first worksheet viewer. File geometry comes from the source workbook. */
+.documentSheetPicker {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.documentSheetPicker label {
+  min-width: 220px;
+}
+.documentViewer {
+  border: 1px solid #dce2eb;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+  min-width: 0;
+}
+.documentToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e8edf3;
+}
+.documentModes,
+.documentZoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.documentToolbar button {
+  color: #4e5968;
+  background: transparent;
+  border: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.documentToolbar button:hover {
+  background: #f2f5fa;
+}
+.documentToolbar .isActive {
+  background: #eaf2ff;
+  color: #1767ea;
+  font-weight: 700;
+}
+.documentZoom span {
+  font-size: 12px;
+  min-width: 42px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.documentFormulaBar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 16px;
+  font-size: 12px;
+  color: #6b7684;
+  background: #fbfcfe;
+}
+.cellAddress {
+  font-weight: 700;
+  color: #3182f6;
+  min-width: 56px;
+  border-right: 1px solid #e0e5ed;
+}
+.documentBody {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+.documentViewport {
+  flex: 1;
+  min-width: 0;
+  max-height: 78vh;
+  overflow: auto;
+  background: #e9edf2;
+  padding: 32px;
+  overscroll-behavior: contain;
+}
+.documentPaper {
+  position: relative;
+  margin: 0 auto;
+  flex-shrink: 0;
+  background: white;
+  box-shadow: 0 2px 12px #182b491a;
+}
+.documentCrop {
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  background: white;
+}
+.documentSheet {
+  position: relative;
+  transform-origin: top left;
+}
+button.documentCell {
+  min-height: 0;
+  position: absolute;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: white;
+  color: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  line-height: 1.15;
+  cursor: default;
+  letter-spacing: normal;
+  min-width: 0;
+  box-shadow: none;
+}
+.documentCellText {
+  display: block;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+button.documentCell.mappedCell {
+  cursor: text;
+}
+button.documentCell:hover {
+  outline: 2px solid #a4c6fb;
+  outline-offset: -2px;
+  z-index: 2;
+}
+button.documentCell.changedCell {
+  box-shadow: inset 3px 0 #f4ad30;
+}
+button.documentCell.selectedCell,
+button.documentCell:focus-visible {
+  outline: 2px solid #3182f6;
+  outline-offset: -2px;
+  z-index: 3;
+}
+.documentImage {
+  position: absolute;
+  object-fit: fill;
+  pointer-events: none;
+}
+.documentInspector {
+  width: 320px;
+  flex-shrink: 0;
+  padding: 20px;
+  border-left: 1px solid #e5e9ef;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: white;
+}
+.documentInspector h3 {
+  margin: 6px 0 0;
+  font-size: 18px;
+}
+.documentInspector .eyebrow {
+  overflow-wrap: anywhere;
+}
+.documentInspector label {
+  font-size: 12px;
+}
+.documentInspector textarea {
+  min-height: 280px;
+  flex: 1;
+  max-height: 55vh;
+  resize: vertical;
+  font-size: 14px;
+  line-height: 1.8;
+  padding: 12px;
+}
+.documentInspector textarea:read-only {
+  background: #f8fafc;
+}
+.documentStatus {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 16px;
+  color: #8b95a1;
+  font-size: 11px;
+  border-top: 1px solid #e5e9ef;
+}
+.documentWarning {
+  margin: 0;
+  padding: 8px 16px;
+  font-size: 12px;
+  background: #fff8e8;
+  color: #805a20;
+}
+.documentSaveBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: #6b7684;
+}
+.documentMapping summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #4e5968;
+}
+.documentMapping[open] summary {
+  margin-bottom: 20px;
+}
+.documentFullscreen {
+  position: fixed;
+  inset: 16px;
+  z-index: 1000;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 0 30px #17202dcc;
+}
+.documentFullscreen .documentBody {
+  flex: 1;
+  min-height: 0;
+}
+.documentFullscreen .documentViewport {
+  max-height: none;
+}
+.documentFullscreen .documentInspector {
+  width: 360px;
+  overflow: auto;
+}
+@media (max-width: 1250px) {
+  .documentViewer:not(.documentFullscreen) .documentBody {
+    flex-direction: column;
+  }
+  .documentViewer:not(.documentFullscreen) .documentInspector {
+    width: auto;
+    border-left: 0;
+    border-top: 1px solid #e5e9ef;
+  }
+  .documentViewer:not(.documentFullscreen) .documentInspector textarea {
+    min-height: 220px;
+  }
+}
+@media (max-width: 700px) {
+  .documentToolbar {
+    padding: 10px;
+    gap: 6px;
+  }
+  .documentToolbar button {
+    padding: 7px;
+  }
+  .documentViewport {
+    padding: 16px;
+  }
+  .documentFormulaBar {
+    flex-wrap: wrap;
+  }
+  .documentStatus {
+    flex-direction: column;
+    gap: 3px;
+  }
+  .documentFullscreen {
+    inset: 0;
+    border-radius: 0;
+  }
+  .documentFullscreen .documentBody {
+    flex-direction: column;
+    overflow: auto;
+  }
+  .documentFullscreen .documentViewport {
+    flex: none;
+    max-height: 55vh;
+  }
+  .documentFullscreen .documentInspector {
+    width: 100%;
+    flex: none;
+  }
+  .documentSaveBar {
+    flex-wrap: wrap;
+  }
+}

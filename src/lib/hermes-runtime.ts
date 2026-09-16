@@ -81,6 +81,7 @@ export async function runHermes(input: {
       "axpm-report",
       "axpm-tickets",
       "axpm-workspace",
+      "hwpx-documents",
     ];
     for (const name of skills)
       await cp(

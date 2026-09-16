@@ -65,10 +65,11 @@ for (const skill of [
   "axpm-report",
   "axpm-tickets",
   "axpm-workspace",
+  "hwpx-documents",
 ])
   await cp(`.claude/skills/${skill}`, `${home}/skills/${skill}`, {
     recursive: true,
   });
 console.log(
-  "Vendored Hermes installed in private/hermes-venv; isolated config and four AXPM skills ready. Run npm run hermes -- chat -q '...'.",
+  "Vendored Hermes installed in private/hermes-venv; isolated config and five AXPM skills ready. Run npm run hermes -- chat -q '...'.",
 );

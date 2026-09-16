@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/jkf87/hwpx-skill",
+  "revision": "ba90fc5ae15f4aead8dab4f9d69d4830b9569859",
+  "installDirectory": "private/tools/hwpx-skill",
+  "redistributed": false,
+  "licenseNote": "No repository-level license found at this revision. Install from upstream locally; AXPM contains its own adapter and workflow, not copied upstream code or templates. Third-party notices remain in the local checkout."
+}

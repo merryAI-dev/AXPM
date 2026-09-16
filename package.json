@@ -20,7 +20,10 @@
     "check:mcp": "tsx scripts/check-http-mcp.ts",
     "check:drive": "tsx scripts/check-live-drive.ts",
     "gemini:connect": "node scripts/connect-gemini.mjs",
-    "check:hermes": "tsx scripts/check-hermes.ts"
+    "check:hermes": "tsx scripts/check-hermes.ts",
+    "check:viewer": "tsx scripts/check-viewer.ts",
+    "hwpx:setup": "node scripts/setup-hwpx.mjs",
+    "hwpx": "node scripts/hwpx.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",
