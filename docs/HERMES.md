@@ -39,3 +39,11 @@ Hermes 프로세스가 `AXPM_BRIDGE_KEY`를 상속받도록 환경을 설정한�
 MCP 도구의 접두사는 클라이언트에 따라 표시가 달라질 수 있다. 키 만료 시 콘솔에서 새 키를 발급하고 에이전트 프로세스를 다시 실행한다. 'MCP 연결 키 전체 폐기'로 즉시 차단할 수 있다.
 
 참고: [Hermes 공식 MCP 설정](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp), [공식 SDK stdio 서버](https://ts.sdk.modelcontextprotocol.io/server).
+
+폴더 관리 확장 도구:
+
+- `axpm_inspect_workspace`, `axpm_list_drive_files`, `axpm_search_drive_index`
+- `axpm_read_drive_cells`, `axpm_propose_drive_change`
+- `axpm_list_uploaded_workbooks`, `axpm_read_uploaded_cells`
+
+`.claude/skills/axpm-workspace/SKILL.md`도 Hermes의 업무 스킬로 등록할 수 있습니다. 업로드 파일 조회는 Google OAuth 없이 작동합니다. Drive 도구는 별도의 실제 권한 동의가 필요합니다. 변경 제안은 항상 운영 콘솔의 작업 센터에서 승인하며 MCP 키로 승인하거나 실행할 수 없습니다.

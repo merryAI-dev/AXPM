@@ -4,6 +4,10 @@ import ExcelJS from "exceljs";
 import { userDoc } from "./firebase";
 import type { Input } from "./importer";
 export const SCOPES: Record<string, string[]> = {
+  drive: [
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/spreadsheets",
+  ],
   sheets: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   gmail: [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -51,7 +55,16 @@ export async function googleClient(
   const doc = await userDoc(uid).collection("private").doc("google").get();
   if (!doc.exists) throw new Error("먼저 Google 연결에 동의해주세요.");
   const data = doc.data()!;
-  if (!SCOPES[capability].every((s) => (data.scopes as string[]).includes(s)))
+  if (
+    !SCOPES[capability].every(
+      (s) =>
+        (data.scopes as string[]).includes(s) ||
+        (s.endsWith("/spreadsheets.readonly") &&
+          (data.scopes as string[]).includes(
+            "https://www.googleapis.com/auth/spreadsheets",
+          )),
+    )
+  )
     throw new Error(`${capability} 권한 동의가 필요합니다.`);
   const client = oauthClient();
   client.setCredentials(decrypt(data.tokens));

@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import WorkspacePanel from "./workspace-panel";
+import JobsPanel from "./jobs-panel";
 import BridgeSettings from "./bridge-settings";
 import {
   onAuthStateChanged,
@@ -15,6 +17,8 @@ import { defaultMapping, fieldLabels } from "@/lib/report-fields";
 import type { overview } from "@/lib/store";
 type State = Awaited<ReturnType<typeof overview>> & { uid: string };
 const tabs = [
+  { id: "drive", name: "파일 · 보고서 편집", icon: "▱" },
+  { id: "jobs", name: "작업 센터", icon: "◎" },
   { id: "overview", name: "운영 현황", icon: "◈" },
   { id: "companies", name: "기업 · 진행 횟수", icon: "▦" },
   { id: "schedule", name: "멘토 일정", icon: "▤" },
@@ -27,7 +31,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null),
     [loaded, setLoaded] = useState(false),
     [state, setState] = useState<State | null>(null);
-  const [tab, setTab] = useState("overview"),
+  const [tab, setTab] = useState("drive"),
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
@@ -113,7 +117,8 @@ export default function Home() {
     setAgentBusy(true);
     setError("");
     try {
-      await api("agent", { goal: request });
+      const job = await api("jobs/agent", { goal: request });
+      await api("jobs/process", { id: job.id });
       await refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -265,6 +270,8 @@ export default function Home() {
         )}
         <div className="contentGrid">
           <section className="content">
+            {tab === "drive" && <WorkspacePanel />}
+            {tab === "jobs" && <JobsPanel />}
             {tab === "overview" && (
               <>
                 <div className="intro">
@@ -787,6 +794,11 @@ export default function Home() {
                   <p>로그인과 별도로 필요한 서비스의 접근 권한을 선택합니다.</p>
                   <div className="connections">
                     {[
+                      [
+                        "drive",
+                        "Google Drive · Sheets 편집",
+                        "관리 폴더 탐색 · 승인 후 파일과 셀 변경",
+                      ],
                       ["sheets", "Google Sheets", "기존 신청·마스터시트 읽기"],
                       ["gmail", "Gmail", "업무 메일 읽기 · 승인 후 발송"],
                       [

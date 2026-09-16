@@ -9,7 +9,10 @@
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "emulators": "firebase emulators:start --project demo-axpm --only auth,firestore,storage",
-    "import:inspect": "tsx scripts/inspect.ts"
+    "import:inspect": "tsx scripts/inspect.ts",
+    "check:integration": "tsx scripts/integration-check.ts && tsx scripts/workspace-check.ts",
+    "deploy:plan": "node scripts/deploy.mjs",
+    "worker": "node scripts/worker.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",

@@ -1,0 +1,17 @@
+{
+  "project": "YOUR_PROJECT_ID",
+  "region": "asia-northeast3",
+  "service": "axpm",
+  "serviceAccount": "axpm-runtime",
+  "firebaseApiKey": "YOUR_PUBLIC_FIREBASE_WEB_API_KEY",
+  "firebaseAuthDomain": "YOUR_PROJECT_ID.firebaseapp.com",
+  "storageBucket": "YOUR_PRIVATE_STORAGE_BUCKET",
+  "allowedEmails": ["operator@example.com"],
+  "secrets": {
+    "TOKEN_ENCRYPTION_KEY": "axpm-token-encryption",
+    "CRON_SECRET": "axpm-cron"
+  },
+  "env": {},
+  "workerUid": "",
+  "workerSchedule": "* * * * *"
+}

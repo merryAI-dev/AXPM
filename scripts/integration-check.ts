@@ -75,17 +75,14 @@ const sample: Snapshot = {
 let client: Client | undefined;
 try {
   await userDoc(a.localId).collection("snapshots").doc("current").set(sample);
-  await userDoc(a.localId)
-    .collection("tickets")
-    .doc("c1-dedicated")
-    .set({
-      companyId: "c1",
-      kind: "dedicated",
-      remainingTickets: 0,
-      remainingHours: 0,
-      revision: 0,
-      snapshotId: sample.id,
-    });
+  await userDoc(a.localId).collection("tickets").doc("c1-dedicated").set({
+    companyId: "c1",
+    kind: "dedicated",
+    remainingTickets: 0,
+    remainingHours: 0,
+    revision: 0,
+    snapshotId: sample.id,
+  });
   assert.equal((await fetch("http://127.0.0.1:3000/api/state")).status, 401);
   const stateB = await (await request(b.idToken, "state")).json();
   assert.equal(stateB.snapshot, null);
@@ -107,7 +104,7 @@ try {
   client = new Client({ name: "integration-test", version: "1.0.0" });
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 6);
+  assert.equal(tools.tools.length, 13);
   assert.ok(!tools.tools.some((t) => /approve|send|execute/.test(t.name)));
   const state = await client.callTool({ name: "axpm_overview", arguments: {} });
   assert.equal(state.isError, false);
@@ -164,7 +161,7 @@ try {
   });
   assert.equal(revoked.isError, true);
   console.log(
-    "PASS: Firebase Auth isolation, deny-by-default rules, 6 MCP tools, proposal-only keys, cross-user rejection, concurrent approval once, revocation. No live email sent.",
+    "PASS: Firebase Auth isolation, deny-by-default rules, 13 MCP tools, proposal-only keys, cross-user rejection, concurrent approval once, revocation. No live email sent.",
   );
 } finally {
   await client?.close();

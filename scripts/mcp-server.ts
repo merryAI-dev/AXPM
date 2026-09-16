@@ -1,3 +1,7 @@
+import {
+  workspaceTools,
+  workspaceDescriptions,
+} from "../src/lib/workspace/agent-tools";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -111,4 +115,14 @@ server.registerTool(
   },
   (input) => call("report_draft", input),
 );
+for (const [name, schema] of Object.entries(workspaceTools)) {
+  server.registerTool(
+    `axpm_${name}`,
+    {
+      description: workspaceDescriptions[name as keyof typeof workspaceTools],
+      inputSchema: schema.shape,
+    },
+    (input: unknown) => call(name, input),
+  );
+}
 await server.connect(new StdioServerTransport());

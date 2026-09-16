@@ -1,3 +1,5 @@
+import { workspaceApi } from "@/lib/workspace/api";
+import { drainJobs } from "@/lib/workspace/jobs";
 import { NextRequest, NextResponse } from "next/server";
 import {
   randomBytes,
@@ -118,7 +120,7 @@ async function handle(request: NextRequest) {
       response.cookies.delete("axpm-oauth");
       return response;
     }
-    if (path === "cron" && request.method === "POST") {
+    if (["cron", "worker"].includes(path) && request.method === "POST") {
       const expected = process.env.CRON_SECRET;
       const actual =
         request.headers.get("authorization")?.replace(/^Bearer /, "") || "";
@@ -132,6 +134,8 @@ async function handle(request: NextRequest) {
       const { uid } = z
         .object({ uid: z.string().min(1).max(128) })
         .parse(await request.json());
+      if (path === "worker")
+        return NextResponse.json(await drainJobs(uid, runAgent));
       if (!(await settings(uid)).monitoringEnabled)
         return NextResponse.json({ skipped: true });
       await sync(uid);
@@ -146,6 +150,8 @@ async function handle(request: NextRequest) {
     const user = await authenticate(request);
     const uid = user.uid;
     const base = userDoc(uid);
+    const workspaceResponse = await workspaceApi(request, uid, path);
+    if (workspaceResponse) return workspaceResponse;
     if (path === "bridge/key" && request.method === "POST")
       return NextResponse.json(await issueBridgeKey(uid, user.email || ""));
     if (path === "bridge/revoke" && request.method === "POST") {
@@ -223,7 +229,9 @@ async function handle(request: NextRequest) {
     }
     if (path === "google/connect" && request.method === "POST") {
       const { capability } = z
-        .object({ capability: z.enum(["sheets", "gmail", "calendar"]) })
+        .object({
+          capability: z.enum(["sheets", "gmail", "calendar", "drive"]),
+        })
         .parse(await request.json());
       const client = oauthClient();
       encrypt({ check: true }); // Validate key before sending user through OAuth.

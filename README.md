@@ -49,3 +49,11 @@ npx tsx scripts/integration-check.ts
 ```
 
 공개 저장소에는 코드·스킬·비식별 테스트만 커밋한다. 원본 파일, OAuth/API 비밀, 생성 보고서와 실제 데이터는 제외한다. 작은 작업 단위로 커밋·푸시한다.
+
+## 폴더 관리 · 보고서 편집
+
+`파일 · 보고서 편집`에서 Google 연결 전에도 XLSX를 업로드하여 실제 셀을 읽고, 매핑을 수정하고, 변경 전후를 검토한 뒤 원본 양식으로 다운로드할 수 있습니다. Drive 연결 이후에는 관리 폴더 탐색, 조사/검색, 파일 복사·이름 변경·휴지통·복원, XLSX 게시와 Google Sheets 셀 변경을 사용할 수 있습니다. 외부 변경은 `작업 센터`에서 승인 후 실행합니다.
+
+[설계와 지원 범위](docs/WORKSPACE-ARCHITECTURE.md), [클라우드 배포 코드](deploy/README.md)를 참고하세요. 이번 작업에서는 Google 재연결과 클라우드 배포를 실행하지 않았습니다.
+
+검증: `npm test`, `npm run typecheck`, `npm run build`. 로컬 Firebase와 개발 서버가 실행 중이면 `npm run check:integration`. 실제 제공된 보고서 양식의 브라우저 검증은 `npx tsx scripts/workspace-browser-check.ts`이며 Downloads의 원본을 찾아 업로드 사본만 수정하고 검사 후 해당 사본을 제거합니다. 결과 파일은 Git 제외된 `private/validation`에 보관합니다.

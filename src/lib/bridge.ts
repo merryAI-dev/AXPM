@@ -1,3 +1,4 @@
+import { workspaceTools, callWorkspaceTool } from "./workspace/agent-tools";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db, userDoc, ApiError, isEmulator, audit } from "./firebase";
@@ -31,6 +32,13 @@ export async function bridgeRequest(request: Request) {
   const { operation, input } = z
     .object({
       operation: z.enum([
+        "list_uploaded_workbooks",
+        "read_uploaded_cells",
+        "inspect_workspace",
+        "list_drive_files",
+        "search_drive_index",
+        "read_drive_cells",
+        "propose_drive_change",
         "overview",
         "company",
         "propose",
@@ -41,6 +49,8 @@ export async function bridgeRequest(request: Request) {
       input: z.record(z.string(), z.unknown()).default({}),
     })
     .parse(await request.json());
+  if (operation in workspaceTools)
+    return callWorkspaceTool(owner.uid, operation, input);
   const state = await overview(owner.uid);
   if (operation === "overview") return operationsContext(state);
   if (operation === "company") {
@@ -108,18 +118,15 @@ export async function bridgeRequest(request: Request) {
   if (!company || p.fields.company !== company.name)
     throw new Error("보고서 기업명과 원본이 일치해야 합니다.");
   const id = randomUUID();
-  await userDoc(owner.uid)
-    .collection("reports")
-    .doc(id)
-    .set({
-      id,
-      companyId: p.companyId,
-      fields: p.fields,
-      sourceNotes: p.sourceNotes,
-      status: "draft",
-      createdAt: new Date().toISOString(),
-      snapshotId: state.snapshot!.id,
-    });
+  await userDoc(owner.uid).collection("reports").doc(id).set({
+    id,
+    companyId: p.companyId,
+    fields: p.fields,
+    sourceNotes: p.sourceNotes,
+    status: "draft",
+    createdAt: new Date().toISOString(),
+    snapshotId: state.snapshot!.id,
+  });
   return {
     id,
     status: "draft",

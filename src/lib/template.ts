@@ -1,3 +1,4 @@
+import { addressSchema } from "./workspace/schema";
 import JSZip from "jszip";
 import ExcelJS from "exceljs";
 import { defaultMapping, fieldLabels } from "./report-fields";
@@ -27,21 +28,34 @@ export async function fillTemplate(
   mapping: Record<string, string>,
   fields: Record<string, string>,
 ): Promise<Buffer> {
-  const w = new ExcelJS.Workbook();
-  await w.xlsx.load(buffer as never);
-  const sheet = w.getWorksheet(sheetName);
-  if (!sheet) throw new Error("템플릿 시트를 찾을 수 없습니다.");
   if (
     Object.keys(mapping).sort().join() !==
     Object.keys(defaultMapping).sort().join()
   )
     throw new Error("9개 보고서 필드 매핑이 모두 필요합니다.");
+  return patchWorkbook(buffer, sheetName, mapping, fields);
+}
+export async function patchWorkbook(
+  buffer: Buffer,
+  sheetName: string,
+  mapping: Record<string, string>,
+  fields: Record<string, string>,
+): Promise<Buffer> {
+  if (buffer.length > 10_000_000)
+    throw new Error("파일은 10MB 이하여야 합니다.");
+  const w = new ExcelJS.Workbook();
+  await w.xlsx.load(buffer as never);
+  const sheet = w.getWorksheet(sheetName);
+  if (!sheet) throw new Error("템플릿 시트를 찾을 수 없습니다.");
   if (new Set(Object.values(mapping)).size !== Object.keys(mapping).length)
     throw new Error("매핑 셀이 중복되었습니다.");
   for (const [field, addr] of Object.entries(mapping)) {
-    if (!/^[A-Z]{1,3}[1-9]\d{0,5}$/.test(addr))
+    if (!/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(addr))
       throw new Error(`셀 주소가 올바르지 않습니다: ${field}`);
+    addressSchema.parse(addr);
     const cell = sheet.getCell(addr);
+    if (cell.type === ExcelJS.ValueType.Formula)
+      throw new Error(`${addr}: 수식 셀은 덮어쓸 수 없습니다.`);
     if (cell.isMerged && cell.master.address !== addr)
       throw new Error(
         `${addr}: 병합 영역의 첫 셀 ${cell.master.address}을 지정해주세요.`,
