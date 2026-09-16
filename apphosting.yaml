@@ -1,0 +1,8 @@
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 20
+  cpu: 1
+  memoryMiB: 1024
+# Configure public Firebase variables and runtime secrets in the Firebase
+# App Hosting console before rollout; see docs/SETUP.md.

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env*
+.firebase
+private
+reports
+*.xlsx
+*.csv
+*.log
+test-results
+playwright-report

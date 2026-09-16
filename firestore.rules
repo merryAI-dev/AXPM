@@ -1,0 +1,7 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Access only through authenticated, owner-scoped server endpoints.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

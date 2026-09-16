@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.env*
+!.env.example
+*.xlsx
+*.xls
+*.csv
+*.log
+*.tsbuildinfo
+.firebase/
+private/
+reports/
+test-results/
+playwright-report/
+service-account*.json
+*credentials*.json
+.DS_Store
