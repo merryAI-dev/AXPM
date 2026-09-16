@@ -15,7 +15,7 @@ npm run hermes -- chat -q '사업 공유 폴더의 현재 조사 상태를 알�
 npm run check:mcp
 ```
 
-설치 스크립트는 공식 Hermes 리비전 `3c3ab69abb9b08683b5eb15b4e2b8be1198c875f`를 `private/tools`에 설치한다. CLI 설정은 `private/hermes`, API 키는 `.env.local`, 24시간짜리 AXPM 연결 키는 `private/agent-runtime.json`에 보관한다. 모두 Git 제외 대상이다. `npm run agent:setup`으로 연결 키를 갱신한다. 전역 Hermes 설정을 덮어쓰지 않는다.
+설치 스크립트는 공식 Hermes 리비전 `3c3ab69abb9b08683b5eb15b4e2b8be1198c875f`를 `vendor/hermes-agent`에 소스째 포함한다. 설치는 이 소스를 사용하고 `private/hermes-venv`에 가상환경을 만든다. CLI 설정은 `private/hermes`, API 키는 `.env.local`, 24시간짜리 AXPM 연결 키는 `private/agent-runtime.json`에 보관한다. 모두 Git 제외 대상이다. `npm run agent:setup`으로 연결 키를 갱신한다. 전역 Hermes 설정을 덮어쓰지 않는다.
 
 `POST /api/bridge`에 Bearer 연결 키와 아래 JSON을 보내면 웹 UI와 같은 Hermes 엔진을 호출한다. 실행 권한을 선택하여 발급한 키만 `agent` 연산을 사용할 수 있다.
 
@@ -44,7 +44,7 @@ Hermes CLI의 AXPM 도구셋 이름은 `axpm`이다. `.claude/skills`의 4개 �
 
 ## 클라우드
 
-Dockerfile은 Node 앱과 동일한 리비전의 Hermes/Python 런타임을 함께 설치한다. Cloud Run 환경에 `AGENT_ENGINE=hermes`, `AGENT_PROVIDER=gemini`, 실제 `AGENT_MODEL`을 지정하고 `GEMINI_API_KEY`는 Secret Manager로 주입한다. API 서버가 MCP 콜백을 받을 수 있도록 `APP_ORIGIN`을 실제 서비스 URL로 지정한다.
+Dockerfile은 저장소에 포함된 Hermes 소스와 Python 런타임을 함께 설치한다. Cloud Run 환경에 `AGENT_ENGINE=hermes`, `AGENT_PROVIDER=gemini`, 실제 `AGENT_MODEL`을 지정하고 `GEMINI_API_KEY`는 Secret Manager로 주입한다. API 서버가 MCP 콜백을 받을 수 있도록 `APP_ORIGIN`을 실제 서비스 URL로 지정한다.
 
 2026-09-16 로컬에서 Gemini 전용 인증 키와 `gemini-3.8-flash`를 연결했다. 합성 XLSX를 사용해 API → Hermes → Gemini → HTTP MCP → Firebase 셀 조회 → 최종 응답을 실제로 검증했다. Cloud Run 배포는 결제 계정 연결이 남아 있으며 아직 완료하지 않았다.
 

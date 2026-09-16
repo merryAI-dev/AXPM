@@ -6,38 +6,21 @@ try {
 } catch {
   /* Environment can be supplied by the caller. */
 }
-const revision = "3c3ab69abb9b08683b5eb15b4e2b8be1198c875f";
-const repo = resolve("private/tools/hermes-agent");
+const repo = resolve("vendor/hermes-agent");
+const venv = resolve("private/hermes-venv");
 function run(command, args) {
   const r = spawnSync(command, args, { stdio: "inherit" });
   if (r.status !== 0) throw new Error(`${command} failed`);
 }
-await mkdir("private/tools", { recursive: true });
-try {
-  await access(`${repo}/.git`);
-} catch {
-  run("git", [
-    "clone",
-    "--no-checkout",
-    "--filter=blob:none",
-    "https://github.com/NousResearch/hermes-agent.git",
-    repo,
-  ]);
-  run("git", ["-C", repo, "checkout", "--detach", revision]);
-}
-const head = spawnSync("git", ["-C", repo, "rev-parse", "HEAD"], {
-  encoding: "utf8",
-});
-if (head.status !== 0 || head.stdout.trim() !== revision)
-  throw new Error(
-    "Hermes checkout differs from the pinned revision. Keep it separate or inspect the existing checkout.",
-  );
-run("uv", ["venv", "--allow-existing", "--python", "3.13", `${repo}/.venv`]);
+await access(`${repo}/pyproject.toml`);
+await access(`${repo}/LICENSE`);
+await mkdir("private", { recursive: true });
+run("uv", ["venv", "--allow-existing", "--python", "3.13", venv]);
 run("uv", [
   "pip",
   "install",
   "--python",
-  `${repo}/.venv/bin/python`,
+  `${venv}/bin/python`,
   "-e",
   `${repo}[mcp]`,
 ]);
@@ -47,7 +30,7 @@ const localEnv = await readFile(envPath, "utf8");
 await writeFile(
   envPath,
   localEnv.replace(/^HERMES_BIN=.*\r?\n?/gm, "").trimEnd() +
-    `\nHERMES_BIN=${JSON.stringify(`${repo}/.venv/bin/hermes`)}\n`,
+    `\nHERMES_BIN=${JSON.stringify(`${venv}/bin/hermes`)}\n`,
   { mode: 0o600 },
 );
 const connection = JSON.parse(
@@ -87,5 +70,5 @@ for (const skill of [
     recursive: true,
   });
 console.log(
-  "Hermes installed in private/tools; isolated config and four AXPM skills ready. Run npm run hermes -- chat -q '...'.",
+  "Vendored Hermes installed in private/hermes-venv; isolated config and four AXPM skills ready. Run npm run hermes -- chat -q '...'.",
 );

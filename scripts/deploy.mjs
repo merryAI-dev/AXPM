@@ -58,6 +58,20 @@ const dir = mkdtempSync(join(tmpdir(), "axpm-deploy-"));
 try {
   if (apply) {
     run(["projects", "describe", c.project, "--format=value(projectId)"], true);
+    const billing = run(
+      [
+        "billing",
+        "projects",
+        "describe",
+        c.project,
+        "--format=value(billingEnabled)",
+      ],
+      true,
+    );
+    if (billing.toLowerCase() !== "true")
+      throw new Error(
+        "Cloud Run 배포에는 선택한 결제 계정을 프로젝트에 연결해야 합니다. 이 스크립트는 결제 계정을 임의로 선택하지 않습니다.",
+      );
     run(
       [
         "iam",

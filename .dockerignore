@@ -10,3 +10,8 @@ reports
 *.log
 test-results
 playwright-report
+
+**/__pycache__
+**/*.egg-info
+**/.venv
+!vendor/hermes-agent/.env.example

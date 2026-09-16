@@ -57,3 +57,8 @@ Hermes 자체의 `mcp test axpm`도 실제 HTTP 연결과 13개 도구 탐색에
 GCP 프로젝트에서 Generative Language/API Keys API를 활성화하고, 별도 Gemini 실행 계정에 바인딩된 Gemini 전용 인증 키를 발급했다. 키 값은 출력하거나 Git에 넣지 않았다. 실제 모델 목록과 Hermes의 Gemini 응답을 확인했다.
 
 `npx tsx scripts/check-hermes.ts --live` 통과: 별도 Firebase 테스트 계정으로 합성 XLSX 업로드 → `/api/bridge` 호출 → Hermes + `gemini-3.8-flash` → HTTP MCP 목록/시트/셀 조회 → C3=`합성기업`, B11=`기존 논의` 최종 답변. 실제 MCP 응답 4개를 확인했고 변경 제안이 생성되지 않았음을 검사했다. 테스트 사용자·데이터·연결 키는 정리했다. 앞 절의 Gemini 미연결 상태는 이 검증으로 해소됐다. Cloud Run 배포와 Gmail/Calendar OAuth는 여전히 미완료다.
+
+
+## FDE 인수인계 · Hermes 소스 포함
+
+사용자 요청에 따라 배포 작업을 중단하고 Hermes 원본 소스 13,490개 파일을 `vendor/hermes-agent`에 직접 포함했다. 원본 압축 파일과 전체 파일 내용·Git blob·실행 권한을 비교했다. 차이 0개이며 라이선스와 출처를 보존한다. 실제 설치도 이 소스로 전환했다. 전환 후 Next production build와 API → Hermes → Gemini → MCP → 합성 C3/B11 조회 검증을 다시 통과했다. upstream 전체 테스트를 실행했다는 의미는 아니다. 배포 코드는 보존하지만 Cloud Run 배포 및 최종 컨테이너 검증은 이번 범위에서 제외했다.

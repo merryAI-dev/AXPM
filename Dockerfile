@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund --fetch-retries=1 --fetch-timeout=60000
 COPY . .
 ARG NEXT_PUBLIC_FIREBASE_API_KEY
 ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
@@ -13,13 +13,10 @@ RUN npm run build
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:0.9.21 /uv /uvx /bin/
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 ENV UV_PYTHON_INSTALL_DIR=/opt/python
-RUN git clone --no-checkout --filter=blob:none https://github.com/NousResearch/hermes-agent.git /opt/hermes \
-    && git -C /opt/hermes checkout --detach 3c3ab69abb9b08683b5eb15b4e2b8be1198c875f \
-    && uv venv --python 3.13 /opt/hermes/.venv \
-    && uv pip install --python /opt/hermes/.venv/bin/python '/opt/hermes[mcp]' \
-    && rm -rf /opt/hermes/.git
+COPY vendor/hermes-agent /opt/hermes
+RUN --mount=type=cache,target=/root/.cache/uv uv venv --python 3.13 /opt/hermes/.venv \
+    && uv pip install --python /opt/hermes/.venv/bin/python -e '/opt/hermes[mcp]'
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=8080
 ENV HERMES_BIN=/opt/hermes/.venv/bin/hermes AGENT_ENGINE=hermes AGENT_PROVIDER=gemini
 COPY --from=build --chown=node:node /app/.next/standalone ./

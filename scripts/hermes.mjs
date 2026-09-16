@@ -29,7 +29,7 @@ if (config.expires <= Date.now())
     "MCP 키가 만료됐습니다. npm run agent:setup 후 다시 실행하세요.",
   );
 const child = spawn(
-  resolve("private/tools/hermes-agent/.venv/bin/hermes"),
+  process.env.HERMES_BIN || resolve("private/hermes-venv/bin/hermes"),
   args,
   {
     stdio: "inherit",

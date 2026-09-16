@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/NousResearch/hermes-agent",
+  "revision": "3c3ab69abb9b08683b5eb15b4e2b8be1198c875f",
+  "archiveSha256": "1a01d798b4ad9c0c2037d94f53d5d3b24b9eb2af56b221395198eb875c3e7807",
+  "sourceDirectory": "vendor/hermes-agent",
+  "sourceModified": false,
+  "sourceFileCount": 13490
+}
