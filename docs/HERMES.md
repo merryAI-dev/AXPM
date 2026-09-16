@@ -23,6 +23,8 @@ Hermes 프로세스가 `AXPM_BRIDGE_KEY`를 상속받도록 환경을 설정한�
 
 이 저장소의 `.claude/skills/axpm-monitor`, `axpm-report`, `axpm-tickets`는 Claude Code에서 프로젝트 스킬로 사용할 수 있다. Hermes에서는 필요한 폴더를 `~/.hermes/skills/` 아래에 복사한다. 업무 규칙 수정은 저장소 스킬을 기준으로 커밋하고 Hermes 사본에 반영한다.
 
+내장 Claude 에이전트도 매 실행 시 이 3개 SKILL.md를 읽는다. 수정된 지침은 다음 실행부터 적용된다. 수량 검증·승인·권한 같은 서버의 규칙은 스킬 문구만으로 해제되지 않는다.
+
 ## 도구
 
 | 도구 | 역할 |
