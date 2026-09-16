@@ -1,4 +1,4 @@
-# Cloud deployment (connection deferred)
+# Cloud deployment
 
 This directory contains deployment code, not a claim that the service is deployed. `node scripts/deploy.mjs private/deploy.json` prints a plan. `--apply` performs it. The script never launches OAuth, chooses billing, or creates credential keys.
 
@@ -7,9 +7,9 @@ Prepare once in the chosen project:
 - Billing, Cloud Run, Cloud Build, Artifact Registry, Firestore, Firebase Auth, Storage, Secret Manager APIs.
 - A private Firestore database and Storage bucket. Deploy the repository's deny-by-default client rules. Firebase Web app with Google sign-in and exact authorized domains.
 - `axpm` Artifact Registry repository and a runtime service account. Grant `roles/datastore.user`, bucket-level `roles/storage.objectUser`, and per-secret `roles/secretmanager.secretAccessor`. Give the build/deploy identity Artifact Registry write and Cloud Run deployment permissions, including actAs on that runtime identity. No project Editor key is needed.
-- Secret Manager secrets: TOKEN_ENCRYPTION_KEY (64 hex), CRON_SECRET (at least 32 chars); later GOOGLE_CLIENT_SECRET and ANTHROPIC_API_KEY. GOOGLE_CLIENT_ID and AGENT_MODEL go in nonsecret env. Missing model config disables the agent; missing Google consent disables Drive/Gmail/Calendar.
+- Secret Manager secrets: TOKEN_ENCRYPTION_KEY (64 hex), CRON_SECRET (at least 32 chars); GEMINI_API_KEY for Hermes + Gemini; GOOGLE_CLIENT_SECRET only for user OAuth. AGENT_ENGINE=hermes, AGENT_PROVIDER=gemini and AGENT_MODEL go in nonsecret env. Missing model config disables the agent. Drive/Sheets can use the shared runtime service account; Gmail/Calendar require separate user OAuth.
 
-Copy `config.example.json` to ignored `private/deploy.json`, fill real values, inspect the printed plan, and apply when connection/deployment is resumed. Firebase public API settings are build-time values. Never copy `.env.local` into the image. The included `.dockerignore` excludes private business files and credentials.
+Copy `config.example.json` to ignored `private/deploy.json`, fill real values, inspect the printed plan, and apply after the required credentials and billing account are configured. Firebase public API settings are build-time values. Never copy `.env.local` into the image. The included `.dockerignore` excludes private business files and credentials.
 
 The public Cloud Run URL serves the login page; every business API verifies a Firebase token and exact operator allowlist. `/api/worker` and `/api/cron` require the separate CRON_SECRET. Use an independent worker invocation rather than fire-and-forget promises inside a web request.
 
@@ -20,3 +20,7 @@ Google OAuth reconnect requires a project-owned Web OAuth client with the correc
 The worker/scheduler commands are also implemented: `node scripts/schedule-worker.mjs private/deploy.json` prints them; `--apply` deploys the dispatcher job and creates the schedule. Set `workerUid` to an actual Firebase operator UID and `schedulerServiceAccount` to a separately provisioned scheduler identity. Use `updateSchedule: true` for an existing schedule. Both Cloud Run Job retries and Scheduler delivery retries are zero; durable queued work is picked up by a future tick, while uncertain writes are held for review.
 
 Optional folder monitoring: set `monitorWorkspace: true` for the dispatcher, and separately enable scheduled monitoring in the operator's app settings. When the queue is idle, a dispatcher tick calls `/api/cron` with `scope=workspace`, scans one page and persists its checkpoint. After a completed scan it queues an agent inspection if model credentials exist. The next worker tick executes that queued inspection. This is polling, not a Drive webhook or Kafka consumer.
+
+Keyless Drive/Sheets: configure GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_ROOT_ID. Share that exact root with the runtime account. Enable IAM Credentials API; grant that account roles/iam.serviceAccountTokenCreator on itself so ADC can mint tokens with Drive/Sheets scopes. Local emulator testing can use AXPM_LOCAL_GCLOUD_AUTH=true with an authorized gcloud user; this flag is rejected outside emulators. No private service account key is created. Folder ancestry is checked on every business operation.
+
+The image includes the pinned Hermes runtime and four AXPM skills. Each model run gets a temporary isolated home and an expiring, owner-scoped MCP credential that is revoked on completion. Scheduled runs receive read-only MCP credentials. Configure GEMINI_API_KEY as a Secret Manager reference. Cloud Run memory is for the Node/Python clients, not a locally hosted model.

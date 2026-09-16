@@ -1,3 +1,4 @@
+import { runAgent } from "./agent";
 import { workspaceTools, callWorkspaceTool } from "./workspace/agent-tools";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -7,17 +8,22 @@ import { gmailSearch, calendarList } from "./google";
 import { defaultMapping } from "./report-fields";
 import { operationsContext, companyContext } from "./agent-context";
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
-export async function issueBridgeKey(uid: string, email: string) {
+export async function issueBridgeKey(
+  uid: string,
+  email: string,
+  allowAgent = false,
+  readOnly = false,
+) {
   const raw = `axpm_${randomBytes(32).toString("hex")}`;
   const expires = Date.now() + 24 * 3600000;
   await db()
     .collection("bridgeKeys")
     .doc(hash(raw))
-    .set({ uid, email, expires });
+    .set({ uid, email, expires, allowAgent, readOnly });
   await audit(uid, "bridge.key.issue", { expires });
   return { key: raw, expires };
 }
-export async function bridgeRequest(request: Request) {
+export async function authenticateBridge(request: Request) {
   const raw =
     request.headers.get("authorization")?.replace(/^Bearer /, "") || "";
   const key = await db().collection("bridgeKeys").doc(hash(raw)).get();
@@ -29,9 +35,14 @@ export async function bridgeRequest(request: Request) {
     .map((x) => x.trim().toLowerCase());
   if (!isEmulator() && !allowed.includes(owner.email.toLowerCase()))
     throw new ApiError(403, "운영자 접근이 해제되었습니다.");
+  return owner;
+}
+export async function bridgeRequest(request: Request) {
+  const owner = await authenticateBridge(request);
   const { operation, input } = z
     .object({
       operation: z.enum([
+        "agent",
         "list_uploaded_workbooks",
         "read_uploaded_cells",
         "inspect_workspace",
@@ -49,10 +60,35 @@ export async function bridgeRequest(request: Request) {
       input: z.record(z.string(), z.unknown()).default({}),
     })
     .parse(await request.json());
+  if (
+    owner.readOnly &&
+    ["agent", "propose_drive_change", "propose", "report_draft"].includes(
+      operation,
+    )
+  )
+    throw new ApiError(403, "정기 점검 키는 조회만 허용합니다.");
+  await audit(owner.uid, "bridge.call", { operation });
+  if (operation === "agent") {
+    if (!owner.allowAgent)
+      throw new ApiError(403, "이 키에는 에이전트 실행 권한이 없습니다.");
+    const { goal } = z
+      .object({ goal: z.string().min(1).max(18000) })
+      .parse(input);
+    return runAgent(owner.uid, goal);
+  }
   if (operation in workspaceTools)
     return callWorkspaceTool(owner.uid, operation, input);
   const state = await overview(owner.uid);
-  if (operation === "overview") return operationsContext(state);
+  if (operation === "overview")
+    return operationsContext(
+      state,
+      z
+        .object({
+          query: z.string().max(100).optional(),
+          offset: z.number().int().min(0).max(10000).optional(),
+        })
+        .parse(input),
+    );
   if (operation === "company") {
     const { companyId } = z.object({ companyId: z.string() }).parse(input);
     return companyContext(state, companyId);

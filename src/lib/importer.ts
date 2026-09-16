@@ -48,16 +48,22 @@ export type Input = {
   role: "mentor" | "internal" | "applications" | "dedicated";
   name: string;
   buffer: Buffer;
+  sheetNames?: Record<string, string>;
 };
 export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
   for (const role of ["mentor", "applications"]) {
     if (inputs.filter((x) => x.role === role).length !== 1)
       throw new Error(`${role} 파일을 하나씩 선택해주세요.`);
   }
+  const originalNames = new WeakMap<ExcelJS.Worksheet, string>();
+  const sheetName = (sheet: ExcelJS.Worksheet) =>
+    originalNames.get(sheet) || sheet.name;
   const books = await Promise.all(
     inputs.map(async (x) => {
       const w = new ExcelJS.Workbook();
       await w.xlsx.load(x.buffer as never);
+      for (const sheet of w.worksheets)
+        originalNames.set(sheet, x.sheetNames?.[sheet.name] || sheet.name);
       return { ...x, w };
     }),
   );
@@ -70,7 +76,7 @@ export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
   }
   const source = books.find((x) => x.role === "mentor")!;
   const master = source.w.worksheets.find((s) =>
-    norm(s.name).includes("전체사업관리현황"),
+    norm(sheetName(s)).includes("전체사업관리현황"),
   );
   if (!master)
     throw new Error(
@@ -89,7 +95,7 @@ export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
   for (const [cell, label] of Object.entries(expected))
     if (norm(text(master.getCell(cell))) !== label)
       throw new Error(
-        `${master.name}!${cell} 열 구조가 변경되었습니다. 매핑 확인이 필요합니다.`,
+        `${sheetName(master)}!${cell} 열 구조가 변경되었습니다. 매핑 확인이 필요합니다.`,
       );
   const companies: Company[] = [];
   for (let r = 6; r <= master.rowCount; r++) {
@@ -118,9 +124,9 @@ export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
     ).slice(0, 20);
     if (companies.some((x) => x.id === id))
       throw new Error(
-        `중복 기업 식별자: ${master.name}!C${r}. 이메일/기업명 중복을 먼저 확인해주세요.`,
+        `중복 기업 식별자: ${sheetName(master)}!C${r}. 이메일/기업명 중복을 먼저 확인해주세요.`,
       );
-    const evidenceId = ev("mentor", master.name, `C${r}`, name);
+    const evidenceId = ev("mentor", sheetName(master), `C${r}`, name);
     const rounds = ["O", "R", "U", "X"].map((col, i) => {
       const complete = cells(col).some(checked);
       const report = cells(["P", "S", "V", "Y"][i])
@@ -129,7 +135,7 @@ export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
         .join("; ");
       const evidenceId = ev(
         "mentor",
-        master.name,
+        sheetName(master),
         cells(col)
           .map((x) => x.address)
           .join(","),
@@ -169,13 +175,13 @@ export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
     evidence.push({
       id: `${id}-representative`,
       source: "mentor",
-      sheet: master.name,
+      sheet: sheetName(master),
       cell: `D${r}`,
       detail: text(c("D")),
     });
     const specialtyEvidence = ev(
       "mentor",
-      master.name,
+      sheetName(master),
       cells("AA")
         .map((x) => x.address)
         .join(","),
@@ -241,15 +247,15 @@ export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
       const matches = companies.filter((x) => norm(x.name) === norm(company));
       const evidenceId = ev(
         "applications",
-        s.name,
+        sheetName(s),
         `F${r}`,
         `신청: ${company}; ${date || "날짜 미확인"} ${time}; 취소선=${!!strike}`,
       );
       const appointment: Appointment = {
-        id: digest(`${s.name}:${r}`).slice(0, 20),
+        id: digest(`${sheetName(s)}:${r}`).slice(0, 20),
         company,
         companyId: matches.length === 1 ? matches[0].id : null,
-        mentor: s.name,
+        mentor: sheetName(s),
         date,
         time,
         status: needsReview ? "review" : "scheduled",
@@ -323,16 +329,16 @@ export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
         const matches = companies.filter((x) => norm(x.name) === norm(company));
         const evidenceId = ev(
           "dedicated",
-          s.name,
+          sheetName(s),
           s.getCell(r, companyCol).address,
           `전담 신청: ${company}; ${date} ${time}; 취소선=${strike}`,
         );
-        const id = digest(`dedicated:${s.name}:${r}`).slice(0, 20);
+        const id = digest(`dedicated:${sheetName(s)}:${r}`).slice(0, 20);
         appointments.push({
           id,
           company,
           companyId: matches.length === 1 ? matches[0].id : null,
-          mentor: s.name,
+          mentor: sheetName(s),
           date,
           time,
           note,
@@ -355,13 +361,15 @@ export async function importWorkbooks(inputs: Input[]): Promise<Snapshot> {
       throw new Error("전담 신청 파일에서 기업명 헤더를 찾지 못했습니다.");
   }
   const internal = books.find((x) => x.role === "internal");
-  const policySheet = internal?.w.getWorksheet("기술협상");
+  const policySheet = internal?.w.worksheets.find(
+    (s) => sheetName(s) === "기술협상",
+  );
   const policyText = policySheet ? text(policySheet.getCell("C7")) : "";
   const basis =
     policyText.includes("멘토링") || policyText.includes("3회")
       ? policyText
       : "기준 미확인: 운영자가 목표 횟수를 설정해야 합니다.";
-  if (policySheet) ev("internal", policySheet.name, "C7", basis);
+  if (policySheet) ev("internal", sheetName(policySheet), "C7", basis);
   return {
     id: digest(
       JSON.stringify({ companies, appointments, evidence, findings, basis }),

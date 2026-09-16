@@ -12,7 +12,13 @@
     "import:inspect": "tsx scripts/inspect.ts",
     "check:integration": "tsx scripts/integration-check.ts && tsx scripts/workspace-check.ts",
     "deploy:plan": "node scripts/deploy.mjs",
-    "worker": "node scripts/worker.mjs"
+    "worker": "node scripts/worker.mjs",
+    "agent:setup": "tsx scripts/setup-local-agent.ts",
+    "agent:ask": "node scripts/ask-agent.mjs",
+    "hermes:setup": "node scripts/setup-hermes.mjs",
+    "hermes": "node scripts/hermes.mjs",
+    "check:mcp": "tsx scripts/check-http-mcp.ts",
+    "check:drive": "tsx scripts/check-live-drive.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",

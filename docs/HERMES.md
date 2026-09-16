@@ -1,49 +1,51 @@
-# Hermes / Claude 연결
+# Hermes + Gemini · API / MCP
 
-AXPM은 내장 Claude 도구 호출 루프와 별도로 stdio MCP 서버를 제공한다. Hermes 또는 Claude Code가 판단을 맡고, AXPM은 시트 읽기·집계·제안 저장·사람의 승인을 담당한다. 모델 API 키는 해당 에이전트에 나중에 설정할 수 있다.
+기본 실행 엔진은 Hermes, 모델 제공자는 Gemini다. Qwen/Ollama 실행 경로와 프로젝트 모델 별칭은 제거했다. Gemini 키나 모델이 없으면 API는 503을 반환하며 다른 모델로 대체하지 않는다.
 
-## 연결
+## 로컬 실행
 
-AXPM 운영 콘솔의 연결 설정에서 'MCP 연결 키 발급'을 눌러 24시간 유효한 키를 발급한다. 키는 조회·초안·제안 권한만 있으며 승인·발송·티켓 확정 API에는 사용할 수 없다. 키를 `AXPM_BRIDGE_KEY` 환경변수에 저장한다. 저장소에는 넣지 않는다.
+Node 22+, uv, Python 3.13, 실행 중인 Firebase 에뮬레이터와 AXPM 서버가 필요하다.
 
-Hermes의 `~/.hermes/config.yaml`에 다음 항목을 추가한다. 기존 설정은 유지한다.
+```sh
+npm run hermes:setup
+# .env.local에 GEMINI_API_KEY, AGENT_MODEL을 설정한다.
+# HERMES_BIN은 private/tools/hermes-agent/.venv/bin/hermes의 절대 경로다.
+npm run agent:ask -- '미신청 후보를 원본 근거로 점검해줘'
+npm run hermes -- chat -q '사업 공유 폴더의 현재 조사 상태를 알려줘'
+npm run check:mcp
+```
+
+설치 스크립트는 공식 Hermes 리비전 `3c3ab69abb9b08683b5eb15b4e2b8be1198c875f`를 `private/tools`에 설치한다. CLI 설정은 `private/hermes`, API 키는 `.env.local`, 24시간짜리 AXPM 연결 키는 `private/agent-runtime.json`에 보관한다. 모두 Git 제외 대상이다. `npm run agent:setup`으로 연결 키를 갱신한다. 전역 Hermes 설정을 덮어쓰지 않는다.
+
+`POST /api/bridge`에 Bearer 연결 키와 아래 JSON을 보내면 웹 UI와 같은 Hermes 엔진을 호출한다. 실행 권한을 선택하여 발급한 키만 `agent` 연산을 사용할 수 있다.
+
+```json
+{"operation":"agent","input":{"goal":"전담·특화 현황을 각각 확인해줘"}}
+```
+
+서버는 실행별 임시 Hermes 디렉터리와 사용자별 MCP 키를 만들고, 최근 대화·4개 업무 스킬을 전달한다. Hermes가 Gemini와 대화하면서 AXPM 도구를 사용한다. 완료/실패는 Firestore에 기록하고 임시 파일과 연결 키를 폐기한다. 정기 실행의 MCP 키는 조회 전용이다. 메일 발송·일정 초대·티켓 확정·Drive 쓰기는 별도 운영자 승인 화면에서 처리한다.
+
+## MCP
+
+표준 Streamable HTTP 엔드포인트: `http://localhost:3000/api/mcp`. 인증 없는 요청과 다른 웹 출처는 거부한다. 기존 `scripts/mcp-server.ts` stdio 연결도 지원한다.
 
 ```yaml
 mcp_servers:
   axpm:
-    command: /absolute/path/to/AXPM/node_modules/.bin/tsx
-    args:
-      - /absolute/path/to/AXPM/scripts/mcp-server.ts
-    env:
-      AXPM_BASE_URL: http://localhost:3000
+    url: http://localhost:3000/api/mcp
+    headers:
+      Authorization: 'Bearer ${AXPM_BRIDGE_KEY}'
     timeout: 120
 ```
 
-Hermes 프로세스가 `AXPM_BRIDGE_KEY`를 상속받도록 환경을 설정한다. 원격 AXPM URL은 HTTPS를 사용한다. Claude Code도 동일한 command/args/env를 MCP 서버 설정에 추가한다.
+13개 도구: 현황, 기업 상세, 업무 메일, 일정, 변경 제안, 보고서 초안, 폴더 상태, Drive 목록, 인덱스 검색, Drive 셀 조회, Drive 변경 제안, 업로드 파일 목록, 업로드 셀 조회. 승인·실행 도구는 노출하지 않는다. 현황의 기업 목록은 10개씩 `query`/`offset`으로 조회한다. 집계는 전체 스냅샷 기준이며 부분 목록임을 응답에 표시한다.
 
-이 저장소의 `.claude/skills/axpm-monitor`, `axpm-report`, `axpm-tickets`는 Claude Code에서 프로젝트 스킬로 사용할 수 있다. Hermes에서는 필요한 폴더를 `~/.hermes/skills/` 아래에 복사한다. 업무 규칙 수정은 저장소 스킬을 기준으로 커밋하고 Hermes 사본에 반영한다.
+Hermes CLI의 AXPM 도구셋 이름은 `axpm`이다. `.claude/skills`의 4개 업무 스킬을 설치 스크립트가 복사하며 API 실행은 저장소의 최신 스킬을 매번 읽는다. 서버의 권한·승인 규칙은 스킬 문구로 해제할 수 없다.
 
-내장 Claude 에이전트도 매 실행 시 이 3개 SKILL.md를 읽는다. 수정된 지침은 다음 실행부터 적용된다. 수량 검증·승인·권한 같은 서버의 규칙은 스킬 문구만으로 해제되지 않는다.
+## 클라우드
 
-## 도구
+Dockerfile은 Node 앱과 동일한 리비전의 Hermes/Python 런타임을 함께 설치한다. Cloud Run 환경에 `AGENT_ENGINE=hermes`, `AGENT_PROVIDER=gemini`, 실제 `AGENT_MODEL`을 지정하고 `GEMINI_API_KEY`는 Secret Manager로 주입한다. API 서버가 MCP 콜백을 받을 수 있도록 `APP_ORIGIN`을 실제 서비스 URL로 지정한다.
 
-| 도구 | 역할 |
-| --- | --- |
-| axpm_overview | 현재 시트·누락·미신청 후보·잔여 티켓 |
-| axpm_company | 기업 상세와 원본 셀 근거 |
-| axpm_work_mail | 승인된 Gmail 범위에서 메타데이터·미리보기 조회 |
-| axpm_calendar | 연결 계정의 일정·겹침 확인 |
-| axpm_propose | 메일·캘린더·티켓 변경 제안, 실행은 콘솔 승인 |
-| axpm_report_draft | 9개 필드 보고서 초안 저장 |
+현재 Gemini 실호출과 Cloud Run 배포는 완료되지 않았다. 키·모델과 프로젝트 결제 연결이 필요하다. HTTP MCP와 실제 Drive/Sheets 연결 검증은 Gemini 추론 검증과 별개다.
 
-MCP 도구의 접두사는 클라이언트에 따라 표시가 달라질 수 있다. 키 만료 시 콘솔에서 새 키를 발급하고 에이전트 프로세스를 다시 실행한다. 'MCP 연결 키 전체 폐기'로 즉시 차단할 수 있다.
-
-참고: [Hermes 공식 MCP 설정](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp), [공식 SDK stdio 서버](https://ts.sdk.modelcontextprotocol.io/server).
-
-폴더 관리 확장 도구:
-
-- `axpm_inspect_workspace`, `axpm_list_drive_files`, `axpm_search_drive_index`
-- `axpm_read_drive_cells`, `axpm_propose_drive_change`
-- `axpm_list_uploaded_workbooks`, `axpm_read_uploaded_cells`
-
-`.claude/skills/axpm-workspace/SKILL.md`도 Hermes의 업무 스킬로 등록할 수 있습니다. 업로드 파일 조회는 Google OAuth 없이 작동합니다. Drive 도구는 별도의 실제 권한 동의가 필요합니다. 변경 제안은 항상 운영 콘솔의 작업 센터에서 승인하며 MCP 키로 승인하거나 실행할 수 없습니다.
+참고: [Hermes Gemini 제공자](https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers/), [Hermes MCP](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp).

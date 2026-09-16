@@ -266,6 +266,21 @@ export class DriveWorkspace {
     return { folder, ...(await this.port.list(parent, pageToken, trashed)) };
   }
   async read(id: string, selected?: { sheet: string; mapping: Mapping }) {
+    // Drive may advance metadata revisions while processing an uploaded XLSX.
+    // Re-read a changing document; never retry a write or return mixed revisions.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await this.readRevision(id, selected);
+      } catch (e) {
+        if (!(e instanceof ReadRevisionChanged) || attempt === 2) throw e;
+      }
+    }
+    throw new Error("파일을 안정적으로 읽지 못했습니다.");
+  }
+  private async readRevision(
+    id: string,
+    selected?: { sheet: string; mapping: Mapping },
+  ) {
     const file = await this.scoped(id);
     let result;
     if (file.mimeType === XLSX)
@@ -282,11 +297,7 @@ export class DriveWorkspace {
         "셀 편집은 XLSX와 Google Sheets를 지원합니다. 다른 형식은 원본에서 열어주세요.",
       );
     const latest = await this.scoped(id);
-    if (file.version !== latest.version)
-      throw new ApiError(
-        409,
-        "읽는 동안 파일이 변경되었습니다. 다시 읽어주세요.",
-      );
+    if (file.version !== latest.version) throw new ReadRevisionChanged();
     return { ...result, file, version: file.version };
   }
   async expect(id: string, version: string, allowTrashed = false) {
@@ -299,6 +310,11 @@ export class DriveWorkspace {
         "원본 버전이 변경되었습니다. 다시 읽고 제안해주세요.",
       );
     return file;
+  }
+}
+class ReadRevisionChanged extends ApiError {
+  constructor() {
+    super(409, "읽는 동안 파일이 변경되었습니다. 다시 읽어주세요.");
   }
 }
 export async function driveConfig(uid: string) {

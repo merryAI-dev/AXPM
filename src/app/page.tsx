@@ -1036,7 +1036,7 @@ export default function Home() {
                   {agentBusy
                     ? "자료를 확인하고 있습니다"
                     : state?.agentConfigured
-                      ? "대화할 준비가 됐습니다"
+                      ? `${state.agentRuntime.provider} · ${state.agentRuntime.model}`
                       : "모델 연결 대기"}
                 </span>
               </div>
@@ -1107,7 +1107,7 @@ export default function Home() {
               <div>
                 <small>
                   {state?.agentConfigured
-                    ? "시트 근거 + 운영자 승인"
+                    ? "실제 모델 연결 · 변경은 승인 후 실행"
                     : "API 키·모델 설정 후 실제 에이전트 실행"}
                 </small>
                 <button

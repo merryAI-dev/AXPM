@@ -11,9 +11,14 @@
   ],
   "secrets": {
     "TOKEN_ENCRYPTION_KEY": "axpm-token-encryption",
-    "CRON_SECRET": "axpm-cron"
+    "CRON_SECRET": "axpm-cron",
+    "GEMINI_API_KEY": "axpm-gemini"
   },
-  "env": {},
+  "env": {
+    "AGENT_ENGINE": "hermes",
+    "AGENT_PROVIDER": "gemini",
+    "AGENT_MODEL": "YOUR_GEMINI_MODEL_ID"
+  },
   "workerUid": "",
   "workerSchedule": "* * * * *",
   "schedulerServiceAccount": "",

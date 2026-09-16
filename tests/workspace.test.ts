@@ -266,3 +266,30 @@ test("publishing a workbook creates a separate file and verifies downloaded byte
   assert.notEqual(result.id, "report");
   assert.equal(f.state.writes, 1);
 });
+
+test("changing Drive revisions retry only reads and stop after a bounded number of attempts", async () => {
+  const f = fakePort(await fixture()),
+    ws = new DriveWorkspace(f.port, "root");
+  const original = f.port.download;
+  let reads = 0;
+  f.port.download = async (id) => {
+    reads++;
+    if (reads === 1) f.files.get("report")!.version = "2";
+    return original(id);
+  };
+  assert.equal(
+    (await ws.read("report", { sheet: "보고서 ' 1회", mapping })).version,
+    "2",
+  );
+  assert.equal(reads, 2);
+  assert.equal(f.state.writes, 0);
+  reads = 0;
+  f.port.download = async (id) => {
+    reads++;
+    f.files.get("report")!.version = String(reads + 2);
+    return original(id);
+  };
+  await assert.rejects(ws.read("report"), /읽는 동안/);
+  assert.equal(reads, 3);
+  assert.equal(f.state.writes, 0);
+});

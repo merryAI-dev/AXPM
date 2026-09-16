@@ -35,3 +35,16 @@ Verified after the workspace/editor/job changes:
 - TypeScript and Next production build pass. Deployment plan scripts run in tests with no gcloud available, verifying that default plan mode does not connect or execute cloud commands.
 
 Google OAuth/Gmail/Drive live calls, native Google Sheets live writes, a live Anthropic/Hermes reasoning run and Cloud Run deployment were not executed in this round. Drive provider contract tests use an explicitly injected in-memory port; production has no automatic fake-data fallback. The local Firebase console is not a deployed production service.
+
+## 2026-09-16 · 실제 Drive/Sheets 연결, Hermes + Gemini 전환
+
+- 공유된 루트를 런타임 서비스 계정으로 실제 조회했다. 개인 키 파일 없이 gcloud/ADC → IAM Credentials 토큰으로 Drive/Sheets에 접근한다.
+- 별도 합성 폴더에서 실제 생성, XLSX 게시·다운로드, B11 편집, 복사·이름 변경·휴지통·복원, native Sheets B11 편집을 검증했다. 수식·기업명·다른 시트 보존, 실행 전 백업과 승인 대기 차단을 확인했다. 테스트 폴더는 휴지통으로 정리했고 기존 업무 파일은 변경하지 않았다.
+- 실제 네 개 운영 시트를 인증 API로 동기화했다: 기업 87개, 일정 307개. Google Sheets 탭 이름에 `/`가 있는 경우의 XLSX 변환 오류를 수정했고 원본 탭 이름을 근거에 보존한다.
+- 공유 폴더 하위 인덱스 조사 완료. 인덱스는 조사 시점의 메타데이터이며 파일 본문 전체를 읽었다는 의미가 아니다.
+- HTTP MCP 표준 클라이언트 초기화·13개 도구 조회·Firestore 현황 조회·미인증 거부·다른 Origin 거부·정기 점검 키의 변경/모델 실행 거부를 검증했다. 기존 stdio/승인/사용자 분리 통합 검사도 통과했다.
+- Hermes 0.21.3을 고정된 공식 리비전으로 로컬 설치했다. AXPM MCP 서버 등록 확인. Gemini를 기본 제공자로 설정하고 CLI와 웹/API 실행 경로를 연결했다. 실행별 임시 디렉터리·사용자별 MCP 키·키 폐기·읽기 전용 정기 실행을 구현했다.
+- 앞서 로컬 모델로 도구 호출/최종 답변을 검증했으나, 사용자 요청에 따라 해당 모델 실행 경로와 프로젝트 모델 별칭을 제거했다. 이 결과를 Gemini 검증으로 간주하지 않는다. Gemini 키·모델 미설정 상태에서는 API가 503으로 연결 필요를 반환한다.
+- 단위 테스트 22개, TypeScript 검사, Next production build 통과. Drive 버전이 읽는 동안 바뀌는 경우 읽기만 제한적으로 재시도하며 쓰기는 재실행하지 않는 회귀 테스트를 포함한다.
+
+운영 GCP 프로젝트, Firestore 데이터베이스, Firebase Web App, 런타임 서비스 계정은 생성했다. Cloud Run/정기 실행은 결제 계정 선택과 연결이 남아 있으며 아직 배포하지 않았다. Gemini 실호출은 API 키·모델 지정 후 검증해야 한다. Gmail/Calendar 사용자 OAuth는 연결되지 않았다.

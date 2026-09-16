@@ -1,3 +1,4 @@
+import { agentRuntime } from "./agent-runtime";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { userDoc, ApiError, audit } from "./firebase";
@@ -85,8 +86,8 @@ export async function overview(uid: string) {
           mapping: template.data()!.mapping,
         }
       : null,
-    agentConfigured:
-      !!process.env.ANTHROPIC_API_KEY && !!process.env.AGENT_MODEL,
+    agentConfigured: agentRuntime().configured,
+    agentRuntime: agentRuntime(),
     googleConfigured:
       !!process.env.GOOGLE_CLIENT_ID &&
       !!process.env.GOOGLE_CLIENT_SECRET &&

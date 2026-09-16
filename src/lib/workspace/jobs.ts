@@ -1,3 +1,4 @@
+import { agentRuntime } from "../agent-runtime";
 import { localWorkbook } from "./local-files";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -87,7 +88,7 @@ export async function enqueueAgent(
   scheduled = false,
 ) {
   z.string().min(1).max(18000).parse(goal);
-  if (!process.env.ANTHROPIC_API_KEY || !process.env.AGENT_MODEL)
+  if (!agentRuntime().configured)
     throw new Error("에이전트 모델과 API 키를 먼저 설정해주세요.");
   const ref = jobs(uid).doc();
   await ref.set({

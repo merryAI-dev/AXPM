@@ -4,7 +4,8 @@ import { api } from "@/lib/client";
 export default function BridgeSettings() {
   const [key, setKey] = useState(""),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [allowAgent, setAllowAgent] = useState(false);
   async function action(revoke = false) {
     setBusy(true);
     setError("");
@@ -13,7 +14,7 @@ export default function BridgeSettings() {
         await api("bridge/revoke", {});
         setKey("");
       } else {
-        const result = await api("bridge/key", {});
+        const result = await api("bridge/key", { allowAgent });
         setKey(result.key);
       }
     } catch (e) {
@@ -31,6 +32,18 @@ export default function BridgeSettings() {
       <p className="hint">
         외부 에이전트가 같은 운영 도구를 사용합니다. 키는 24시간 유효하며
         조회·제안만 가능하고 승인·발송 권한은 없습니다.
+      </p>
+      <label className="inlineCheck">
+        <input
+          type="checkbox"
+          checked={allowAgent}
+          onChange={(e) => setAllowAgent(e.target.checked)}
+        />
+        이 키로 모델을 호출하는 에이전트 API도 허용
+      </label>
+      <p className="hint">
+        HTTP MCP: {typeof window !== "undefined" ? window.location.origin : ""}
+        /api/mcp · Bearer 키 인증
       </p>
       <div className="actions">
         <button

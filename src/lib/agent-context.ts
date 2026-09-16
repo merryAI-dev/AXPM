@@ -1,5 +1,8 @@
 import type { overview } from "./store";
-export function operationsContext(state: Awaited<ReturnType<typeof overview>>) {
+export function operationsContext(
+  state: Awaited<ReturnType<typeof overview>>,
+  options: { query?: string; offset?: number } = {},
+) {
   const data = state.snapshot;
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: "Asia/Seoul",
@@ -19,33 +22,50 @@ export function operationsContext(state: Awaited<ReturnType<typeof overview>>) {
       appointments: data?.appointments.length || 0,
       findings: state.findings.length,
     },
-    companies: data?.companies.map((c) => ({
-      id: c.id,
-      name: c.name,
-      mentor: c.mentor,
-      campus: c.campus,
-      active: c.active,
-      regular: c.regular,
-      specialtyCount: c.specialtyCount,
-      requested: c.requested,
-      assigned: c.assigned,
-      evidenceId: c.evidenceId,
-      findingTitles: [
-        ...new Set(
-          state.findings
-            .filter((f) => f.companyId === c.id)
-            .map((f) => f.title),
-        ),
-      ],
-    })),
-    findings: state.findings.slice(0, 30),
-    findingsTruncated: state.findings.length > 30,
-    upcomingAppointments: upcoming.slice(0, 50),
-    upcomingTruncated: upcoming.length > 50,
+    companyQuery: options.query || "",
+    nextCompanyOffset:
+      (options.offset || 0) + 10 <
+      (data?.companies.filter((c) =>
+        `${c.name} ${c.mentor} ${c.campus}`
+          .normalize("NFC")
+          .includes((options.query || "").normalize("NFC")),
+      ).length || 0)
+        ? (options.offset || 0) + 10
+        : null,
+    companies: data?.companies
+      .filter((c) =>
+        `${c.name} ${c.mentor} ${c.campus}`
+          .normalize("NFC")
+          .includes((options.query || "").normalize("NFC")),
+      )
+      .slice(options.offset || 0, (options.offset || 0) + 10)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        mentor: c.mentor,
+        campus: c.campus,
+        active: c.active,
+        regular: c.regular,
+        specialtyCount: c.specialtyCount,
+        requested: c.requested,
+        assigned: c.assigned,
+        evidenceId: c.evidenceId,
+        findingTitles: [
+          ...new Set(
+            state.findings
+              .filter((f) => f.companyId === c.id)
+              .map((f) => f.title),
+          ),
+        ],
+      })),
+    findings: state.findings.slice(0, 5),
+    findingsTruncated: state.findings.length > 5,
+    upcomingAppointments: upcoming.slice(0, 5),
+    upcomingTruncated: upcoming.length > 5,
     tickets: state.tickets,
     google: state.google,
     instruction:
-      "개별 기업의 전체 근거·일정·누락은 기업 상세 도구로 조회하세요. 위 findings는 최대 30개이며 전체 목록이 아닙니다.",
+      "개별 기업의 전체 근거·일정·누락은 기업 상세 도구로 조회하세요. companies는 검색어와 offset으로 10개씩, findings와 일정은 최대 5개씩입니다. 전체 목록으로 간주하지 마세요.",
   };
 }
 export function companyContext(

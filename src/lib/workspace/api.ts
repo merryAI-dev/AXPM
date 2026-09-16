@@ -1,3 +1,4 @@
+import { serviceAccountMode } from "../google-service-account";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { userDoc, storage } from "../firebase";
@@ -32,9 +33,23 @@ export async function workspaceApi(
     get = request.method === "GET";
   if (path === "drive/status" && get) {
     const token = (await base.collection("private").doc("google").get()).data();
+    const config = await driveConfig(uid);
+    let connected = SCOPES.drive.every((s) => token?.scopes?.includes(s));
+    let connectionError = "";
+    if (serviceAccountMode() && config) {
+      try {
+        await (await workspace(uid)).folder(config.rootId);
+        connected = true;
+      } catch (e) {
+        connected = false;
+        connectionError = e instanceof Error ? e.message : "접근 확인 실패";
+      }
+    }
     return json({
-      config: await driveConfig(uid),
-      connected: SCOPES.drive.every((s) => token?.scopes?.includes(s)),
+      config,
+      connected,
+      connectionError,
+      connectionMode: serviceAccountMode() ? "service-account" : "oauth",
       index: await indexStatus(uid),
     });
   }

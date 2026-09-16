@@ -1,3 +1,7 @@
+import {
+  serviceAccountMode,
+  driveServiceAccountClient,
+} from "./google-service-account";
 import { google } from "googleapis";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import ExcelJS from "exceljs";
@@ -52,6 +56,8 @@ export async function googleClient(
   uid: string,
   capability: keyof typeof SCOPES,
 ) {
+  if (["drive", "sheets"].includes(capability) && serviceAccountMode())
+    return driveServiceAccountClient(uid);
   const doc = await userDoc(uid).collection("private").doc("google").get();
   if (!doc.exists) throw new Error("먼저 Google 연결에 동의해주세요.");
   const data = doc.data()!;
@@ -213,6 +219,8 @@ export async function readSheetAsWorkbook(
     auth: await googleClient(uid, "sheets"),
   });
   const id = spreadsheetId(value);
+  if (serviceAccountMode())
+    await (await (await import("./workspace/drive")).workspace(uid)).scoped(id);
   const { data: meta } = await api.spreadsheets.get({
     spreadsheetId: id,
     fields: "properties(title),sheets(properties)",
@@ -236,8 +244,11 @@ export async function readSheetAsWorkbook(
       "sheets(properties,merges,data(startRow,startColumn,rowData(values(effectiveValue,effectiveFormat(numberFormat,textFormat/strikethrough)))))",
   });
   const w = new ExcelJS.Workbook();
-  for (const s of data.sheets || []) {
-    const ws = w.addWorksheet(s.properties!.title!);
+  const sheetNames: Record<string, string> = {};
+  for (const [index, s] of (data.sheets || []).entries()) {
+    const alias = `AXPM_${index + 1}`;
+    sheetNames[alias] = s.properties!.title!;
+    const ws = w.addWorksheet(alias);
     for (const grid of s.data || [])
       (grid.rowData || []).forEach((row, ri) =>
         (row.values || []).forEach((cell, ci) => {
@@ -270,6 +281,7 @@ export async function readSheetAsWorkbook(
   return {
     role,
     name: meta.properties?.title || role,
+    sheetNames,
     buffer: Buffer.from(await w.xlsx.writeBuffer()),
   };
 }

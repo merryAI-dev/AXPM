@@ -213,3 +213,22 @@ test("Sheets URL에서 ID만 추출하고 다른 URL은 거부한다", () => {
   );
   assert.throws(() => spreadsheetId("https://example.com/secret"));
 });
+
+test("native Sheets titles retain slashes and long names in evidence after Excel transport conversion", async () => {
+  const input = await fixtures();
+  const applications = input.find((i) => i.role === "applications")!;
+  const w = new ExcelJS.Workbook();
+  await w.xlsx.load(applications.buffer as never);
+  const original = "마케팅/브랜딩_성지영_아주 긴 실제 Google Sheets 탭 이름";
+  w.worksheets[0].name = "AXPM_1";
+  applications.buffer = Buffer.from(await w.xlsx.writeBuffer());
+  applications.sheetNames = { AXPM_1: original };
+  const result = await importWorkbooks(input);
+  assert.ok(result.appointments.some((a) => a.mentor === original));
+  assert.ok(
+    result.evidence.some(
+      (e) => e.source === "applications" && e.sheet === original,
+    ),
+  );
+  assert.ok(!result.evidence.some((e) => e.sheet === "AXPM_1"));
+});

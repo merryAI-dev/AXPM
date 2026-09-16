@@ -1,3 +1,5 @@
+import { handleMcp } from "@/lib/mcp-http";
+import { agentRuntime } from "@/lib/agent-runtime";
 import { indexStep, indexStatus } from "@/lib/workspace/indexer";
 import { workspaceApi } from "@/lib/workspace/api";
 import { drainJobs, enqueueAgent } from "@/lib/workspace/jobs";
@@ -65,6 +67,7 @@ async function handle(request: NextRequest) {
   try {
     if (path === "health" && request.method === "GET")
       return NextResponse.json({ status: "ok" });
+    if (path === "mcp") return await handleMcp(request);
     if (path === "bridge" && request.method === "POST")
       return NextResponse.json(await bridgeRequest(request));
     if (path === "google/callback" && request.method === "GET") {
@@ -147,11 +150,7 @@ async function handle(request: NextRequest) {
       if (scope === "workspace") {
         const state = await indexStatus(uid);
         const scan = await indexStep(uid, !state || state.complete);
-        if (
-          !scan.complete ||
-          !process.env.ANTHROPIC_API_KEY ||
-          !process.env.AGENT_MODEL
-        )
+        if (!scan.complete || !agentRuntime().configured)
           return NextResponse.json({ scan, agent: "not_started" });
         return NextResponse.json({
           scan,
@@ -176,8 +175,14 @@ async function handle(request: NextRequest) {
     const base = userDoc(uid);
     const workspaceResponse = await workspaceApi(request, uid, path);
     if (workspaceResponse) return workspaceResponse;
-    if (path === "bridge/key" && request.method === "POST")
-      return NextResponse.json(await issueBridgeKey(uid, user.email || ""));
+    if (path === "bridge/key" && request.method === "POST") {
+      const { allowAgent } = z
+        .object({ allowAgent: z.boolean().default(false) })
+        .parse(await request.json());
+      return NextResponse.json(
+        await issueBridgeKey(uid, user.email || "", allowAgent),
+      );
+    }
     if (path === "bridge/revoke" && request.method === "POST") {
       const keys = await db()
         .collection("bridgeKeys")
