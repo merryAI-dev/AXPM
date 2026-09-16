@@ -98,6 +98,6 @@ export async function patchWorkbook(
     );
   }
   // Patch only mapped cell XML. All other ZIP members, drawings, styles and print settings remain untouched.
-  zip.file(path, xml);
+  zip.file(path, xml, { createFolders: false });
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }

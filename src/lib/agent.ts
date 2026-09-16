@@ -53,6 +53,7 @@ export async function runAgent(uid: string, goal: string, scheduled = false) {
   if (!process.env.ANTHROPIC_API_KEY || !process.env.AGENT_MODEL)
     throw new Error("에이전트 모델과 API 키를 먼저 설정해주세요.");
   const client = new Anthropic({ timeout: 60000, maxRetries: 1 });
+  const signal = AbortSignal.timeout(8 * 60 * 1000);
   const id = randomUUID();
   const base = userDoc(uid);
   const runRef = base.collection("runs").doc(id);
@@ -121,13 +122,16 @@ export async function runAgent(uid: string, goal: string, scheduled = false) {
 조사 결과의 근거, 미확인 사항, 사용자에게 필요한 결정을 설명하세요. 내부 사고과정을 길게 노출하지 마세요. 도구 실패를 성공으로 표현하지 마세요. 최대 8번 모델 호출 안에 끝내세요.
 다음은 운영자가 관리하는 업무 스킬입니다. 도구명 axpm_overview/axpm_company/axpm_work_mail/axpm_calendar/axpm_propose/axpm_report_draft는 각각 inspect_operations/inspect_company/search_work_mail/inspect_calendar/propose_action/save_report_draft에 대응합니다.\n${skills.join("\n\n")}`;
     for (let step = 0; step < 8; step++) {
-      const response = await client.messages.create({
-        model: process.env.AGENT_MODEL,
-        max_tokens: 2400,
-        system,
-        tools,
-        messages,
-      });
+      const response = await client.messages.create(
+        {
+          model: process.env.AGENT_MODEL,
+          max_tokens: 2400,
+          system,
+          tools,
+          messages,
+        },
+        { signal },
+      );
       messages.push({ role: "assistant", content: response.content });
       const calls = response.content.filter(
         (x): x is Anthropic.ToolUseBlock => x.type === "tool_use",

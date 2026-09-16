@@ -135,6 +135,27 @@ try {
     true,
   );
   f.port.create = create;
+  const expiredClaim = await proposeDrive(
+    uid,
+    { ...request, requestId: randomUUID() },
+    ws,
+  );
+  await decideJob(uid, expiredClaim.id, true);
+  const metadata = f.port.metadata,
+    beforeExpiryWrites = f.state.writes;
+  f.port.metadata = async (id) => {
+    await userDoc(uid)
+      .collection("jobs")
+      .doc(expiredClaim.id)
+      .update({ leaseUntil: 0 });
+    return metadata(id);
+  };
+  assert.equal(
+    (await processJob(uid, expiredClaim.id, async () => ({}), ws)).status,
+    "failed",
+  );
+  assert.equal(f.state.writes, beforeExpiryWrites);
+  f.port.metadata = metadata;
   await userDoc(uid)
     .collection("jobs")
     .doc("expired")

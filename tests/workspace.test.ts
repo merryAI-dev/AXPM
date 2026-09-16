@@ -207,3 +207,62 @@ test("rename, copy, create, trash and restore verify metadata", async () => {
     false,
   );
 });
+
+test("archives without directory entries keep exactly the original member set", async () => {
+  const zip = await JSZip.loadAsync(await fixture());
+  for (const name of Object.keys(zip.files))
+    if (zip.files[name].dir) delete zip.files[name];
+  const original = await zip.generateAsync({ type: "nodebuffer" });
+  const selected = { sheet: "보고서 ' 1회", mapping };
+  const read = await readWorkbook(original, selected);
+  const output = await editWorkbook(
+    original,
+    selected.sheet,
+    mapping,
+    read.values,
+    { ...read.values, notes: "변경" },
+  );
+  assert.deepEqual(
+    Object.keys((await JSZip.loadAsync(output)).files).sort(),
+    Object.keys(zip.files).sort(),
+  );
+});
+
+test("publishing a workbook creates a separate file and verifies downloaded bytes", async () => {
+  const bytes = await fixture(),
+    f = fakePort(bytes),
+    ws = new DriveWorkspace(f.port, "root");
+  let sourceRead = false;
+  const command = commandSchema.parse({
+    kind: "workbook.publish",
+    parentId: "root",
+    name: "게시할 보고서.xlsx",
+    workbookId: "00000000-0000-4000-8000-000000000001",
+    version: "hash",
+  });
+  await assert.rejects(
+    executeCommand(
+      ws,
+      command,
+      async () => {},
+      async () => {},
+    ),
+    /원본/,
+  );
+  assert.equal(f.state.writes, 0);
+  const result = await executeCommand(
+    ws,
+    command,
+    async () => {},
+    async () => {
+      assert.equal(sourceRead, true);
+    },
+    async () => {
+      sourceRead = true;
+      return bytes;
+    },
+  );
+  assert.equal(result.name, "게시할 보고서.xlsx");
+  assert.notEqual(result.id, "report");
+  assert.equal(f.state.writes, 1);
+});

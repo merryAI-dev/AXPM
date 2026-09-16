@@ -81,7 +81,11 @@ export async function decideJob(uid: string, id: string, approve: boolean) {
     return { id, status };
   });
 }
-export async function enqueueAgent(uid: string, goal: string) {
+export async function enqueueAgent(
+  uid: string,
+  goal: string,
+  scheduled = false,
+) {
   z.string().min(1).max(18000).parse(goal);
   if (!process.env.ANTHROPIC_API_KEY || !process.env.AGENT_MODEL)
     throw new Error("에이전트 모델과 API 키를 먼저 설정해주세요.");
@@ -90,6 +94,7 @@ export async function enqueueAgent(uid: string, goal: string) {
     id: ref.id,
     kind: "agent.run",
     goal,
+    scheduled,
     status: "queued",
     attempts: 0,
     createdAt: now(),
@@ -99,7 +104,7 @@ export async function enqueueAgent(uid: string, goal: string) {
 export async function processJob(
   uid: string,
   id: string,
-  agent: (uid: string, goal: string) => Promise<unknown>,
+  agent: (uid: string, goal: string, scheduled?: boolean) => Promise<unknown>,
   adapter?: DriveWorkspace,
 ) {
   z.string()
@@ -134,7 +139,8 @@ export async function processJob(
   let writeStarted = false;
   try {
     let result: unknown;
-    if (job.kind === "agent.run") result = await agent(uid, job.goal);
+    if (job.kind === "agent.run")
+      result = await agent(uid, job.goal, job.scheduled === true);
     else {
       const ws = adapter || (await workspace(uid));
       if (ws.root !== job.rootId)
@@ -151,7 +157,23 @@ export async function processJob(
         },
         async () => {
           // Durable marker comes before sending the write. A crash afterward is uncertain.
-          await ref.update({ writeStartedAt: now() });
+          await ref.firestore.runTransaction(async (tx) => {
+            const [current, owner] = await Promise.all([
+              tx.get(ref),
+              tx.get(lock),
+            ]);
+            if (
+              current.data()?.status !== "running" ||
+              current.data()?.claim !== claim ||
+              owner.data()?.claim !== claim ||
+              current.data()!.leaseUntil <= Date.now()
+            )
+              throw new ApiError(
+                409,
+                "실행 권한이 만료되었습니다. 작업 이력을 확인해주세요.",
+              );
+            tx.update(ref, { writeStartedAt: now() });
+          });
           writeStarted = true;
         },
         async () => {
@@ -208,7 +230,7 @@ export async function recoverJobs(uid: string) {
 }
 export async function drainJobs(
   uid: string,
-  agent: (uid: string, goal: string) => Promise<unknown>,
+  agent: (uid: string, goal: string, scheduled?: boolean) => Promise<unknown>,
 ) {
   await recoverJobs(uid);
   const queued = await jobs(uid).where("status", "==", "queued").limit(1).get();

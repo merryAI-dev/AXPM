@@ -1,5 +1,6 @@
+import { indexStep, indexStatus } from "@/lib/workspace/indexer";
 import { workspaceApi } from "@/lib/workspace/api";
-import { drainJobs } from "@/lib/workspace/jobs";
+import { drainJobs, enqueueAgent } from "@/lib/workspace/jobs";
 import { NextRequest, NextResponse } from "next/server";
 import {
   randomBytes,
@@ -37,7 +38,7 @@ import { runAgent } from "@/lib/agent";
 import { defaultMapping, inspectTemplate, fillTemplate } from "@/lib/template";
 import { bridgeRequest, issueBridgeKey } from "@/lib/bridge";
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 900;
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 const fieldsSchema = z.object(
   Object.fromEntries(
@@ -62,6 +63,8 @@ async function sync(uid: string) {
 async function handle(request: NextRequest) {
   const path = request.nextUrl.pathname.replace("/api/", "");
   try {
+    if (path === "health" && request.method === "GET")
+      return NextResponse.json({ status: "ok" });
     if (path === "bridge" && request.method === "POST")
       return NextResponse.json(await bridgeRequest(request));
     if (path === "google/callback" && request.method === "GET") {
@@ -131,13 +134,34 @@ async function handle(request: NextRequest) {
         !timingSafeEqual(Buffer.from(actual), Buffer.from(expected))
       )
         throw new ApiError(401, "인증 실패");
-      const { uid } = z
-        .object({ uid: z.string().min(1).max(128) })
+      const { uid, scope } = z
+        .object({
+          uid: z.string().min(1).max(128),
+          scope: z.enum(["mentoring", "workspace"]).default("mentoring"),
+        })
         .parse(await request.json());
       if (path === "worker")
         return NextResponse.json(await drainJobs(uid, runAgent));
       if (!(await settings(uid)).monitoringEnabled)
         return NextResponse.json({ skipped: true });
+      if (scope === "workspace") {
+        const state = await indexStatus(uid);
+        const scan = await indexStep(uid, !state || state.complete);
+        if (
+          !scan.complete ||
+          !process.env.ANTHROPIC_API_KEY ||
+          !process.env.AGENT_MODEL
+        )
+          return NextResponse.json({ scan, agent: "not_started" });
+        return NextResponse.json({
+          scan,
+          job: await enqueueAgent(
+            uid,
+            "관리 폴더 조사본의 범위와 최신성을 확인하고, 보고서 관련 파일을 실제 셀 근거로 점검해주세요. 파일명만으로 완료·누락을 확정하지 말고 설정된 양식이 없는 파일은 매핑 확인을 요청하세요. 미확인 사항과 다음 결정을 보고하고 변경은 제안만 하세요. 티켓 조정이나 보고서 작성은 하지 마세요.",
+            true,
+          ),
+        });
+      }
       await sync(uid);
       return NextResponse.json(
         await runAgent(

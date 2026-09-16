@@ -68,7 +68,7 @@ Gmail 읽기는 제한된 OAuth 범위에 해당한다. 테스트 사용자 범�
 
 `CRON_SECRET`을 32자 이상 랜덤 값으로 Secret Manager에 저장하고 운영자 설정에서 정기 점검을 허용한다. Cloud Scheduler에서 `POST APP_ORIGIN/api/cron`, `Authorization: Bearer CRON_SECRET`, JSON 본문 `{"uid":"FIREBASE_AUTH_UID"}`를 설정한다. 예: 평일 09:00, 시간대 Asia/Seoul. 비밀 헤더는 저장소에 넣지 않는다. UID는 `GET /api/state` 응답 또는 Firebase Auth 콘솔에서 확인한다.
 
-정기 요청은 시트 동기화 후 에이전트 점검을 수행하고 운영 콘솔에 보고한다. 메일을 자동 발송하지 않는다. 현재 장기 작업 큐는 없으며 서버 요청 시간 한도 내에서 실행한다. 운영 전 실제 모델 응답 시간에 맞춰 스케줄러·서버 타임아웃을 검증해야 한다.
+정기 요청은 시트 동기화 후 에이전트 점검을 수행하고 운영 콘솔에 보고한다. 메일을 자동 발송하지 않는다. 대화 및 Drive 변경 작업은 Firestore 작업 큐에 저장하고 `/api/worker`가 실행한다. 멘토링 정기 점검 경로는 요청 안에서 동기화와 모델 호출을 수행한다. 운영 전 실제 모델 응답 시간에 맞춰 스케줄러·서버 타임아웃을 검증해야 한다.
 
 ## 검증
 
@@ -80,3 +80,6 @@ Gmail 읽기는 제한된 OAuth 범위에 해당한다. 테스트 사용자 범�
 - [Gmail 서버 OAuth](https://developers.google.com/workspace/gmail/api/auth/web-server)
 - [Gmail OAuth 범위](https://developers.google.com/workspace/gmail/api/auth/scopes)
 - [Claude 도구 호출](https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls)
+
+
+폴더 정기 조사는 같은 `/api/cron`에 `{"uid":"FIREBASE_AUTH_UID","scope":"workspace"}`를 보낸다. 한 요청에서 파일 한 페이지를 조사하고 체크포인트를 저장한다. 완료될 때까지 다음 호출에서 이어가며, 한 차례 조사가 끝나고 모델이 설정되어 있으면 근거 확인 에이전트 작업을 큐에 넣는다. `/api/worker`가 그 작업을 실행한다. 모델이 없으면 파일 조사만 수행한다. 운영자의 정기 점검 허용 설정이 꺼져 있으면 건너뛴다. 실제 Google 연결 전에는 외부 조회를 하지 못하고 오류를 반환한다.

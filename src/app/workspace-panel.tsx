@@ -17,7 +17,7 @@ type LocalFile = {
   updatedAt: string;
 };
 type EditorData = {
-  file: { id: string; name: string };
+  file: { id: string; name: string; mimeType?: string };
   version: string;
   sheets: { name: string; rows: number; columns: number }[];
   values: Record<string, string>;
@@ -864,6 +864,19 @@ export function WorkbookEditor({
             {source === "local" ? "확인한 셀 저장" : "변경안 저장"}
           </button>
         </section>
+      )}
+      {source === "drive" && data?.file.mimeType === XLSX && (
+        <button
+          className="secondary"
+          disabled={busy}
+          onClick={() =>
+            act(() =>
+              download("drive/download", { fileId: id }, data.file.name),
+            )
+          }
+        >
+          Drive에 저장된 XLSX 다운로드
+        </button>
       )}
       {source === "local" && (
         <button

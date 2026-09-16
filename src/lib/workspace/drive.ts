@@ -66,8 +66,8 @@ function indices(address: string) {
 }
 export async function googleDrivePort(uid: string): Promise<DrivePort> {
   const auth = await googleClient(uid, "drive");
-  const drive = google.drive({ version: "v3", auth });
-  const sheets = google.sheets({ version: "v4", auth });
+  const drive = google.drive({ version: "v3", auth, timeout: 30000 });
+  const sheets = google.sheets({ version: "v4", auth, timeout: 30000 });
   return {
     async metadata(id) {
       return normalize(

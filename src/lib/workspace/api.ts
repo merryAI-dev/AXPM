@@ -56,6 +56,26 @@ export async function workspaceApi(
       ),
     );
   }
+  if (path === "drive/download" && !get) {
+    const { fileId } = z
+      .object({ fileId: idSchema })
+      .parse(await request.json());
+    const ws = await workspace(uid),
+      file = await ws.scoped(fileId);
+    if (
+      file.mimeType !==
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+      throw new Error("원본 XLSX 파일만 다운로드할 수 있습니다.");
+    const buffer = await ws.port.download(fileId);
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": file.mimeType,
+        "Content-Disposition": 'attachment; filename="report.xlsx"',
+        "Cache-Control": "no-store",
+      },
+    });
+  }
   if (path === "drive/read" && !get) {
     const p = z
       .object({ fileId: idSchema, selected: editSchema.optional() })

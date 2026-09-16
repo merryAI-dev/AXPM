@@ -73,9 +73,9 @@ export function fakePort(bytes: Buffer) {
       if (b) state.bytes = b;
       return structuredClone(f);
     },
-    async create(parent, name) {
+    async create(parent, name, bytes) {
       state.writes++;
-      const f = { ...file("created", FOLDER, [parent]), name };
+      const f = { ...file("created", bytes ? XLSX : FOLDER, [parent]), name };
       files.set(f.id, f);
       return f;
     },

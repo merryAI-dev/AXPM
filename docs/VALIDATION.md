@@ -23,3 +23,15 @@
 - Cloud Scheduler 정기 실행.
 
 이 항목은 프로젝트·시트 URL·API 계정 연결 후 검증한다. 코드 경로와 MCP 연결 검증이 실제 서비스 연결 검증을 대신하지 않는다.
+
+## 2026-09-16 · Folder workspace implementation, connections deferred
+
+Verified after the workspace/editor/job changes:
+
+- 17 unit tests pass, covering source ZIP member preservation, arbitrary field mapping, formulas, merged children, stale versions, Drive ancestry restrictions, changed-cell-only native adapter writes, lifecycle operations, publication and nonexecuting deployment plans.
+- Firebase emulator integration passes: real XLSX upload/read/save/download, concurrent save rejection, authenticated routes, two-account isolation, 13 MCP tools without approval/execution capabilities, idempotent proposals, concurrent approval and execution claims, uncertain results held without replay, expired leases including write fencing, resumable index and root-change isolation.
+- Desktop/mobile Chromium smoke test passes using the actual user-supplied report template: 9 fields read, one synthetic discussion cell edited, diff reviewed, save/download verified, job center navigation, no page exceptions or horizontal mobile overflow. The synthetic uploaded test copy is removed afterward.
+- Downloaded real-template archive has exactly the original 18 member names. Only `xl/worksheets/sheet1.xml` changed; the other 17 file payloads are byte-identical. Original Downloads file is untouched. Output and screenshots remain in ignored `private/validation`.
+- TypeScript and Next production build pass. Deployment plan scripts run in tests with no gcloud available, verifying that default plan mode does not connect or execute cloud commands.
+
+Google OAuth/Gmail/Drive live calls, native Google Sheets live writes, a live Anthropic/Hermes reasoning run and Cloud Run deployment were not executed in this round. Drive provider contract tests use an explicitly injected in-memory port; production has no automatic fake-data fallback. The local Firebase console is not a deployed production service.

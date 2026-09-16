@@ -64,6 +64,7 @@ export async function indexStep(
       updatedAt: new Date().toISOString(),
       leaseUntil: 0,
       claim,
+      error: "",
     };
     await ref.firestore.runTransaction(async (tx) => {
       if ((await tx.get(ref)).data()?.claim !== claim)
@@ -97,7 +98,10 @@ export async function indexStatus(uid: string) {
   const d = (
     await userDoc(uid).collection("private").doc("drive-index").get()
   ).data();
-  if (!d) return null;
+  const config = (
+    await userDoc(uid).collection("config").doc("drive").get()
+  ).data();
+  if (!d || d.rootId !== config?.rootId) return null;
   return {
     count: d.count,
     folders: d.folders,
