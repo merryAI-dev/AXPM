@@ -144,11 +144,12 @@ export async function runHermes(input: {
       );
       let stdout = "",
         overflow = false;
-      child.stdout.on("data", (chunk: Buffer) => {
-        if (Buffer.byteLength(stdout) + chunk.length > 2_000_000) {
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        if (Buffer.byteLength(stdout) + Buffer.byteLength(chunk) > 2_000_000) {
           overflow = true;
           child.kill("SIGKILL");
-        } else stdout += chunk.toString();
+        } else stdout += chunk;
       });
       // Do not leak provider credentials or business content from library error dumps.
       child.stderr.resume();
