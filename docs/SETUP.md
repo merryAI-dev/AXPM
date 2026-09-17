@@ -32,6 +32,21 @@ Drive API, Sheets API, IAM Service Account Credentials API를 활성화한다. `
 
 Google Cloud에서 웹 OAuth 클라이언트를 만들고 승인된 리디렉션 URI에 `APP_ORIGIN/api/mail/oauth/callback`을 등록한다. `GOOGLE_OAUTH_CLIENT_ID`는 일반 환경변수로, `GOOGLE_OAUTH_CLIENT_SECRET`과 32바이트 base64 값인 `OAUTH_TOKEN_ENCRYPTION_KEY`는 Secret Manager에서 주입한다. `AXPM_GMAIL_ACCOUNT`로 수집 전용 계정을 제한한다. 조직 전체 위임은 사용하지 않는다. 운영자가 플랫폼의 **내 Google 계정 연동하기**를 눌러 해당 계정의 `gmail.readonly` 범위에 직접 동의한다.
 
+OAuth 클라이언트를 새로 만들지 않고 Firebase Google 로그인이 쓰는 웹 클라이언트를 재사용할 수 있다. 아래 명령은 클라이언트 ID만 출력하고 비밀값은 화면에 출력하지 않는다.
+
+```sh
+PROJECT=axpm-mysc-20260916
+curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "x-goog-user-project: $PROJECT" \
+  "https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/defaultSupportedIdpConfigs/google.com" \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["clientId"]); print("secret:", "present" if d.get("clientSecret") else "missing")'
+
+# 암호화 키 (로컬과 배포는 서로 다른 값을 사용한다)
+openssl rand -base64 32
+```
+
+`clientSecret`은 `.env.local` 또는 Secret Manager에 직접 저장하고 채팅·Git·로그에 남기지 않는다. 기존 OAuth 클라이언트의 리디렉션 URI 추가는 gcloud로 할 수 없으므로 Google Cloud 콘솔의 사용자 인증 정보 화면에서 등록한다.
+
 플랫폼은 `AXPM_GMAIL_QUERY`에 맞는 최근 메시지를 최대 25개씩 확인한다. 허용된 첨부(`xlsx`, `pdf`, `docx`, `hwp`, `hwpx`)만 관리 폴더 아래 `[AXPM] 메일 첨부 수집함`에 저장한다. 메시지 ID와 첨부 ID로 중복을 막고, XLSX 보고서만 본문 기업·캠퍼스와 마스터를 대조해 표준 파일명으로 변경한다. 모호하거나 같은 표준 이름이 이미 있는 파일은 원본 이름으로 보관하고 검토 대상으로 표시한다.
 
 서버는 메일 본문을 저장하지 않는다. Google 갱신·액세스 토큰은 AES-256-GCM으로 암호화해 사용자 연결 문서에 보관하며 화면의 연결 해제로 Google 토큰 폐기와 저장 문서 삭제를 함께 수행한다. 자동 실행은 Cloud Scheduler에서 `/api/cron`에 `{"uid":"운영_UID","scope":"mail"}`을 보내도록 구성한다.

@@ -22,7 +22,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-로컬 주소는 `http://localhost:3000`이다. Firebase Google 로그인 뒤 `ALLOWED_DOMAINS` 또는 `ALLOWED_EMAILS`에 등록된 계정만 업무 API를 사용할 수 있다.
+로컬 주소는 `APP_ORIGIN`과 같은 값으로 연다(예: `http://127.0.0.1:3000`). `localhost`와 `127.0.0.1`은 서로 다른 출처로 취급되어 저장·연동 요청이 403으로 거절된다. Firebase Google 로그인 뒤 `ALLOWED_DOMAINS` 또는 `ALLOWED_EMAILS`에 등록된 계정만 업무 API를 사용할 수 있다.
 
 ## 운영 설정
 
