@@ -6,24 +6,20 @@
     "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "tsx --import ./tests/setup.ts --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "emulators": "firebase emulators:start --project demo-axpm --only auth,firestore,storage",
-    "import:inspect": "tsx scripts/inspect.ts",
-    "check:integration": "tsx scripts/integration-check.ts && tsx scripts/workspace-check.ts",
     "deploy:plan": "node scripts/deploy.mjs",
+    "check:deployment": "node scripts/check-deployment.mjs",
     "worker": "node scripts/worker.mjs",
-    "agent:setup": "tsx scripts/setup-local-agent.ts",
     "agent:ask": "node scripts/ask-agent.mjs",
     "hermes:setup": "node scripts/setup-hermes.mjs",
     "hermes": "node scripts/hermes.mjs",
-    "check:mcp": "tsx scripts/check-http-mcp.ts",
-    "check:drive": "tsx scripts/check-live-drive.ts",
+    "check:cloud": "tsx scripts/check-cloud.ts",
     "gemini:connect": "node scripts/connect-gemini.mjs",
-    "check:hermes": "tsx scripts/check-hermes.ts",
-    "check:viewer": "tsx scripts/check-viewer.ts",
-    "hwpx:setup": "node scripts/setup-hwpx.mjs",
-    "hwpx": "node scripts/hwpx.mjs"
+    "monitor:reports": "tsx scripts/report-monitor.ts",
+    "monitor:install": "node scripts/install-report-monitor.mjs",
+    "sync:reports": "tsx scripts/sync-reports.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",
@@ -39,11 +35,9 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "prettier": "^3.9.6",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   },

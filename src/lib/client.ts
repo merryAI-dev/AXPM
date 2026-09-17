@@ -13,7 +13,10 @@ export const emulator =
   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID === "demo-axpm";
 if (emulator && !auth.emulatorConfig)
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+let quotaRetryAt = 0;
+let quotaMessage = "";
 export async function api(path: string, body?: unknown, blob = false) {
+  if (Date.now() < quotaRetryAt) throw new Error(quotaMessage);
   const token = await auth.currentUser?.getIdToken();
   const form = body instanceof FormData;
   const response = await fetch(`/api/${path}`, {
@@ -28,6 +31,12 @@ export async function api(path: string, body?: unknown, blob = false) {
   });
   if (!response.ok) {
     const data = await response.json();
+    if (data.code === "RESOURCE_EXHAUSTED") {
+      quotaRetryAt =
+        Date.now() +
+        Math.min(900, Math.max(30, Number(data.retryAfter) || 900)) * 1000;
+      quotaMessage = data.error;
+    }
     throw new Error(data.error || "요청 실패");
   }
   return blob ? response.blob() : response.json();

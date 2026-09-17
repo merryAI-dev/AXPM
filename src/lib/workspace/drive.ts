@@ -1,3 +1,4 @@
+import { defaultDriveConfig } from "./defaults";
 import { google, type drive_v3 } from "googleapis";
 import { Readable } from "node:stream";
 import { googleClient } from "../google";
@@ -29,7 +30,12 @@ export interface DrivePort {
     fields: { name?: string; trashed?: boolean },
     bytes?: Buffer,
   ): Promise<DriveFile>;
-  create(parent: string, name: string, bytes?: Buffer): Promise<DriveFile>;
+  create(
+    parent: string,
+    name: string,
+    bytes?: Buffer,
+    mimeType?: string,
+  ): Promise<DriveFile>;
   copy(id: string, parent: string, name: string): Promise<DriveFile>;
   readCells(
     id: string,
@@ -135,19 +141,24 @@ export async function googleDrivePort(uid: string): Promise<DrivePort> {
         ).data,
       );
     },
-    async create(parent, name, bytes) {
+    async create(parent, name, bytes, mimeType) {
       return normalize(
         (
           await drive.files.create({
             requestBody: {
               name,
               parents: [parent],
-              mimeType: bytes ? XLSX : FOLDER,
+              mimeType: bytes ? mimeType || XLSX : FOLDER,
             },
             fields,
             supportsAllDrives: true,
             ...(bytes
-              ? { media: { mimeType: XLSX, body: Readable.from(bytes) } }
+              ? {
+                  media: {
+                    mimeType: mimeType || XLSX,
+                    body: Readable.from(bytes),
+                  },
+                }
               : {}),
           })
         ).data,
@@ -250,7 +261,6 @@ export class DriveWorkspace {
     const file = await this.port.metadata(id);
     if (file.trashed && !allowTrashed)
       throw new ApiError(409, "휴지통에 있는 파일입니다.");
-    // Never resolve shortcuts, which can point outside the authorized subtree.
     let current = file;
     const seen = new Set<string>();
     for (let depth = 0; depth < 100; depth++) {
@@ -281,8 +291,6 @@ export class DriveWorkspace {
     selected?: { sheet: string; mapping: Mapping },
     preview = false,
   ) {
-    // Drive may advance metadata revisions while processing an uploaded XLSX.
-    // Re-read a changing document; never retry a write or return mixed revisions.
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         return await this.readRevision(id, selected, preview);
@@ -350,7 +358,14 @@ export async function driveConfig(uid: string) {
   const raw = (
     await userDoc(uid).collection("config").doc("drive").get()
   ).data();
-  return raw ? driveConfigSchema.parse(raw) : null;
+  return driveConfigSchema.parse(
+    raw || {
+      ...defaultDriveConfig(),
+      rootId:
+        process.env.GOOGLE_SERVICE_ACCOUNT_ROOT_ID ||
+        defaultDriveConfig().rootId,
+    },
+  );
 }
 export async function workspace(uid: string) {
   const config = await driveConfig(uid);

@@ -228,45 +228,6 @@ test("archives without directory entries keep exactly the original member set", 
   );
 });
 
-test("publishing a workbook creates a separate file and verifies downloaded bytes", async () => {
-  const bytes = await fixture(),
-    f = fakePort(bytes),
-    ws = new DriveWorkspace(f.port, "root");
-  let sourceRead = false;
-  const command = commandSchema.parse({
-    kind: "workbook.publish",
-    parentId: "root",
-    name: "게시할 보고서.xlsx",
-    workbookId: "00000000-0000-4000-8000-000000000001",
-    version: "hash",
-  });
-  await assert.rejects(
-    executeCommand(
-      ws,
-      command,
-      async () => {},
-      async () => {},
-    ),
-    /원본/,
-  );
-  assert.equal(f.state.writes, 0);
-  const result = await executeCommand(
-    ws,
-    command,
-    async () => {},
-    async () => {
-      assert.equal(sourceRead, true);
-    },
-    async () => {
-      sourceRead = true;
-      return bytes;
-    },
-  );
-  assert.equal(result.name, "게시할 보고서.xlsx");
-  assert.notEqual(result.id, "report");
-  assert.equal(f.state.writes, 1);
-});
-
 test("changing Drive revisions retry only reads and stop after a bounded number of attempts", async () => {
   const f = fakePort(await fixture()),
     ws = new DriveWorkspace(f.port, "root");

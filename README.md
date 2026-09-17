@@ -1,63 +1,46 @@
 # AXPM · 멘토링 운영 에이전트
 
-FDE 구현·인수인계용 저장소. [전체 인수인계 안내](docs/FDE-HANDOFF.md)와 [포함된 Hermes 소스](vendor/hermes-agent)를 참고하세요. 배포는 현재 작업 범위에서 제외합니다.
+기존 Google Drive와 Google Sheets를 유지하면서 멘토링 보고서와 사업관리 마스터를 자동으로 연결하는 운영 도구다.
 
-기존 Google 스프레드시트를 유지하면서 전담·특화 멘토링의 신청, 진행 횟수, 보고서 누락을 점검하는 운영자용 보조 시스템.
+## 제품 범위
 
-기업과 멘토는 기존 시트에서 계속 신청·기록한다. 운영자는 에이전트와 대화하고, 제안을 승인하고, 원본 엑셀 양식의 보고서를 다운로드한다.
-
-## 구현된 기능
-
-- Sheets API 읽기 및 기존 XLSX 가져오기. 캠퍼스별 헤더, 병합 날짜, 병합 기업의 추가 실적과 취소선을 처리한다.
-- 전담·특화 구분, 진행 횟수 재집계, 미신청 후보·보고서 누락·일정 확인사항 표시.
-- Firebase Auth, Firestore 업무 상태·대화·승인 이력, Storage 원본 템플릿 저장.
-- Hermes + Gemini 도구 호출 실행 경로. 업무 스킬을 읽어 조사·질문·후속조치 제안·보고서 초안 작성을 수행한다.
-- Hermes/Claude용 MCP 서버. 같은 조회·제안 도구를 제공하며 실행 권한은 운영자 승인 화면에 둔다.
-- 전담·특화 잔여 티켓과 시간을 대화로 지정·증감. 승인 시 이전·이후 기록을 남기고 중복 승인을 차단한다.
-- Gmail/Calendar를 각각 Google OAuth 동의 후 연결. 업무 메일 조회, 승인한 메일 발송·일정 초대.
-- 보고서의 9개 필드를 C3/E3/C4/E4/C5/C6/B9/B11/B13에 매핑. 원본 XLSX의 해당 셀만 교체해 다운로드.
+- 사업관리 마스터의 KPI, 진행 회차, 보고서 미기입 현황을 홈에서 조회한다.
+- 관리 Drive 폴더의 최근 변경과 보고서 파일 구조를 조사한다.
+- 멘토가 정해진 회차 탭을 완성하면 일자와 필수 항목을 검증하고 마스터에 반영한다.
+- 자동 반영한 탭이 삭제되거나 필수 항목이 사라지면 원복 제안을 만든다. 운영자 승인 뒤 자동 기록한 셀만 되돌린다.
+- 파일명 표준화안을 미리 보여주고 선택한 변경만 실행한다.
+- Gemini 에이전트가 같은 조회·기록 도구를 API와 MCP로 반복 실행한다.
+- 모든 자동 조사, 반영, 승인, 실패를 작업 이력에 기록한다.
 
 ## 실행
+
+Node.js 22 이상이 필요하다.
 
 ```sh
 npm ci
 cp .env.example .env.local
-npm run emulators
-# 다른 터미널
 npm run dev
 ```
 
-http://localhost:3000 에서 로컬 검증 계정으로 시작한다. Node 22+, Java 21+가 필요하다. 암호화 키와 연결 설정은 [설치·운영 안내](docs/SETUP.md)를 따른다.
+로컬 주소는 `http://localhost:3000`이다. Firebase Google 로그인 뒤 `ALLOWED_DOMAINS` 또는 `ALLOWED_EMAILS`에 등록된 계정만 업무 API를 사용할 수 있다.
 
-## 연결 상태와 범위
+## 운영 설정
 
-Firebase 에뮬레이터에서 실제 파일 가져오기·저장·보고서 다운로드를 검증했다. GCP 프로젝트·Firestore·Firebase Web App·런타임 서비스 계정은 생성했고, 공유된 Drive/Sheets의 실제 CRUD를 검증했다. Cloud Run은 결제 연결 대기다. 로컬 Hermes + Gemini는 전용 인증 키로 연결했고 API → MCP → 실제 셀 조회 → 최종 응답을 검증했다. Gmail/Calendar는 별도 사용자 OAuth 동의가 필요하다. 키가 없을 때 AI 응답을 흉내 내지 않는다.
-
-Drive의 XLSX와 Google Sheets는 지정 셀 변경을 제안·승인·백업·저장·재조회한다. 잔여 티켓은 사용자가 확정하는 별도 원장이며 신청만으로 자동 차감하지 않는다. 특화 완료 표시는 시간 단위 시수와 다르다. 기존 템플릿 사진과 인쇄 서식은 그대로 유지되며 사진 교체·자동 행 높이 조정은 지원하지 않는다. 정산 기능은 후속 확장 범위다.
-
-## 문서와 검증
-
-- [Firebase·Google·정기 점검 설정](docs/SETUP.md)
-- [Hermes MCP와 Claude 스킬](docs/HERMES.md)
-- [검증 결과와 한계](docs/VALIDATION.md)
-- 업무 스킬: [.claude/skills](.claude/skills)
+Firebase, Drive 서비스 계정, Gemini 키, 마스터 시트와 관리 폴더 값은 환경변수로 주입한다. 실제 키와 고객 문서는 저장소나 이미지에 포함하지 않는다. 설정 항목은 [.env.example](.env.example), 운영 절차는 [docs/SETUP.md](docs/SETUP.md), 배포 절차는 [deploy/README.md](deploy/README.md)를 따른다.
 
 ```sh
-npm test
 npm run typecheck
+npm test
 npm run build
-# 로컬 에뮬레이터와 앱 실행 후
-npx tsx scripts/integration-check.ts
 ```
 
-공개 저장소에는 코드·스킬·비식별 테스트만 커밋한다. 원본 파일, OAuth/API 비밀, 생성 보고서와 실제 데이터는 제외한다. 작은 작업 단위로 커밋·푸시한다.
+테스트 코드는 배포 이미지의 실행 경로에 연결되지 않는다. 운영 API에는 합성 데이터, 데모 로그인, 고정 응답 대체 경로가 없다.
 
-## 폴더 관리 · 보고서 편집
+## 관련 문서
 
-`파일 · 보고서 편집`에서 Google 연결 전에도 XLSX를 업로드하여 실제 셀을 읽고, 매핑을 수정하고, 변경 전후를 검토한 뒤 원본 양식으로 다운로드할 수 있습니다. Drive 연결 이후에는 관리 폴더 탐색, 조사/검색, 파일 복사·이름 변경·휴지통·복원, XLSX 게시와 Google Sheets 셀 변경을 사용할 수 있습니다. 외부 변경은 `작업 센터`에서 승인 후 실행합니다.
-
-[설계와 지원 범위](docs/WORKSPACE-ARCHITECTURE.md), [클라우드 배포 코드](deploy/README.md)를 참고하세요. Drive/Sheets는 키 파일 없는 서비스 계정 인증으로 연결했습니다. Cloud Run 배포는 아직 실행되지 않았습니다.
-
-검증: `npm test`, `npm run typecheck`, `npm run build`. 로컬 Firebase와 개발 서버가 실행 중이면 `npm run check:integration`. 실제 제공된 보고서 양식의 브라우저 검증은 `npx tsx scripts/workspace-browser-check.ts`이며 Downloads의 원본을 찾아 업로드 사본만 수정하고 검사 후 해당 사본을 제거합니다. 결과 파일은 Git 제외된 `private/validation`에 보관합니다.
-
-로컬 에이전트/API 설치와 실행: [Hermes + Gemini 안내](docs/HERMES.md). `npm run hermes:setup` 후 `.env.local`의 Gemini 키·모델을 설정하고 `npm run agent:ask -- '현황을 점검해줘'`로 호출합니다.
+- [제품 업데이트 및 인수인계 안내](docs/PRODUCT-HANDOFF.md)
+- [멘토링 자동 반영](docs/MENTORING-AUTOMATION.md)
+- [보고서 감시](docs/AUTOMATIC-REPORT-MONITOR.md)
+- [Gemini API](docs/GEMINI-API.md)
+- [선택적 Hermes 연결](docs/HERMES.md)
+- [Drive 워크스페이스](docs/WORKSPACE-ARCHITECTURE.md)

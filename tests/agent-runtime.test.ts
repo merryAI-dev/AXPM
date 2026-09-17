@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { agentRuntime } from "../src/lib/agent-runtime";
 import { parseHermesOutput } from "../src/lib/hermes-runtime";
-import { chatMessages } from "../src/lib/agent-model";
 
 test("Hermes requires explicit Gemini model, key and executable; removed providers never silently fall back", () => {
   const names = [
@@ -15,7 +14,7 @@ test("Hermes requires explicit Gemini model, key and executable; removed provide
   const old = Object.fromEntries(names.map((k) => [k, process.env[k]]));
   try {
     for (const k of names) delete process.env[k];
-    assert.equal(agentRuntime().engine, "hermes");
+    assert.equal(agentRuntime().engine, "builtin");
     assert.equal(agentRuntime().configured, false);
     Object.assign(process.env, {
       AGENT_ENGINE: "hermes",
@@ -24,6 +23,9 @@ test("Hermes requires explicit Gemini model, key and executable; removed provide
       GEMINI_API_KEY: "synthetic-test-key",
       HERMES_BIN: "/test/hermes",
     });
+    assert.equal(agentRuntime().configured, true);
+    process.env.AGENT_ENGINE = "builtin";
+    delete process.env.HERMES_BIN;
     assert.equal(agentRuntime().configured, true);
     delete process.env.GEMINI_API_KEY;
     assert.equal(agentRuntime().configured, false);
@@ -59,25 +61,33 @@ test("Hermes CLI exit alone is not proof of a model response, and tool failures 
     { tool: "mcp__axpm__axpm_overview", result: "도구 실행 실패" },
   ]);
 });
-test("Vertex conversation conversion pairs multiple tool calls with their original IDs", () => {
-  const result = chatMessages("rules", [
-    {
-      role: "assistant",
-      content: [
-        { type: "tool_use", id: "one", name: "first", input: { a: 1 } },
-        { type: "tool_use", id: "two", name: "second", input: {} },
-      ],
-    },
-    {
-      role: "user",
-      content: [
-        { type: "tool_result", tool_use_id: "one", content: "first-result" },
-        { type: "tool_result", tool_use_id: "two", content: "second-result" },
-      ],
-    },
-  ]);
-  assert.deepEqual(result.slice(2), [
-    { role: "tool", tool_call_id: "one", content: "first-result" },
-    { role: "tool", tool_call_id: "two", content: "second-result" },
-  ]);
+test("Hermes master write capability does not grant recursive agent execution, scheduled runs cannot write", async () => {
+  const { hermesPermissions, authorizeBridgeOperation } =
+    await import("../src/lib/bridge-policy");
+  const interactive = hermesPermissions(false);
+  assert.doesNotThrow(() => authorizeBridgeOperation(interactive, "master"));
+  assert.doesNotThrow(() =>
+    authorizeBridgeOperation(interactive, "record_mentoring"),
+  );
+  assert.throws(
+    () => authorizeBridgeOperation(interactive, "agent"),
+    /에이전트 실행 권한/,
+  );
+  const scheduled = hermesPermissions(true);
+  assert.doesNotThrow(() => authorizeBridgeOperation(scheduled, "master"));
+  for (const operation of [
+    "record_mentoring",
+    "apply_report_submissions",
+    "apply_report_names",
+    "agent",
+    "propose_drive_change",
+  ])
+    assert.throws(
+      () => authorizeBridgeOperation(scheduled, operation),
+      /조회만/,
+    );
+  assert.throws(
+    () => authorizeBridgeOperation({}, "record_mentoring"),
+    /마스터 기록 권한/,
+  );
 });

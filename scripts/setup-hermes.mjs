@@ -1,5 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, writeFile, cp, access } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  writeFile,
+  cp,
+  access,
+  chmod,
+} from "node:fs/promises";
 import { resolve } from "node:path";
 try {
   process.loadEnvFile(".env.local");
@@ -24,15 +31,22 @@ run("uv", [
   "-e",
   `${repo}[mcp]`,
 ]);
-run("npm", ["run", "agent:setup"]);
 const envPath = ".env.local";
-const localEnv = await readFile(envPath, "utf8");
+const localEnv = await readFile(envPath, "utf8").catch(() => "");
 await writeFile(
   envPath,
-  localEnv.replace(/^HERMES_BIN=.*\r?\n?/gm, "").trimEnd() +
-    `\nHERMES_BIN=${JSON.stringify(`${venv}/bin/hermes`)}\n`,
+  localEnv.replace(/^(HERMES_BIN|AGENT_ENGINE)=.*\r?\n?/gm, "").trimEnd() +
+    `\nAGENT_ENGINE=hermes\nHERMES_BIN=${JSON.stringify(`${venv}/bin/hermes`)}\n`,
   { mode: 0o600 },
 );
+await chmod(envPath, 0o600);
+if (!process.argv.includes("--local-demo")) {
+  console.log(
+    "Hermes 설치 및 AGENT_ENGINE=hermes 설정 완료. 앱 서버를 재시작하면 운영자별 임시 MCP 연결을 사용합니다. Firebase 에뮬레이터는 필요하지 않습니다.",
+  );
+  process.exit(0);
+}
+run("npm", ["run", "agent:setup"]);
 const connection = JSON.parse(
   await readFile("private/agent-runtime.json", "utf8"),
 );
@@ -63,13 +77,11 @@ await writeFile(
 for (const skill of [
   "axpm-monitor",
   "axpm-report",
-  "axpm-tickets",
   "axpm-workspace",
-  "hwpx-documents",
 ])
   await cp(`.claude/skills/${skill}`, `${home}/skills/${skill}`, {
     recursive: true,
   });
 console.log(
-  "Vendored Hermes installed in private/hermes-venv; isolated config and five AXPM skills ready. Run npm run hermes -- chat -q '...'.",
+  "Vendored Hermes installed in private/hermes-venv with AXPM skills.",
 );

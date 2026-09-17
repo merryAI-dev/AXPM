@@ -70,13 +70,6 @@ const name = z
   .refine((x) => !/[\x00-\x1f]/.test(x));
 const existing = { fileId: idSchema, version: z.string().min(1) };
 export const commandSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("workbook.publish"),
-    parentId: idSchema,
-    name,
-    workbookId: z.string().uuid(),
-    version: z.string().min(1),
-  }),
   z.object({ kind: z.literal("folder.create"), parentId: idSchema, name }),
   z.object({
     kind: z.literal("file.copy"),

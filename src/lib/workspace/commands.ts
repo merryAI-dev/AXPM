@@ -4,14 +4,12 @@ import { editWorkbook } from "./workbook";
 export async function validateCommand(ws: DriveWorkspace, command: Command) {
   if (
     command.kind === "folder.create" ||
-    command.kind === "file.copy" ||
-    command.kind === "workbook.publish"
+    command.kind === "file.copy"
   ) {
     const parent = await ws.folder(command.parentId);
     if (parent.capabilities.canAddChildren === false)
       throw new Error("폴더에 파일을 추가할 권한이 없습니다.");
-    if (command.kind === "folder.create" || command.kind === "workbook.publish")
-      return { target: parent };
+    if (command.kind === "folder.create") return { target: parent };
   }
   if (!("fileId" in command)) throw new Error("파일이 필요합니다.");
   const target = await ws.expect(
@@ -55,29 +53,13 @@ export async function validateCommand(ws: DriveWorkspace, command: Command) {
   }
   return { target };
 }
-// Caller saves an encrypted/owner-scoped backup before the first external write.
 export async function executeCommand(
   ws: DriveWorkspace,
   command: Command,
   backup: (bytes: Buffer, mime: string) => Promise<void>,
   beforeWrite: () => Promise<void>,
-  publishSource?: () => Promise<Buffer>,
 ) {
   await validateCommand(ws, command);
-  if (command.kind === "workbook.publish") {
-    if (!publishSource) throw new Error("게시할 엑셀 원본이 없습니다.");
-    const bytes = await publishSource();
-    await beforeWrite();
-    const created = await ws.port.create(command.parentId, command.name, bytes);
-    const verified = await ws.scoped(created.id);
-    if (
-      verified.name !== command.name ||
-      !verified.parents.includes(command.parentId) ||
-      !(await ws.port.download(created.id)).equals(bytes)
-    )
-      throw new Error("게시한 엑셀 검증에 실패했습니다.");
-    return verified;
-  }
   if (command.kind === "folder.create") {
     await beforeWrite();
     const f = await ws.port.create(command.parentId, command.name);

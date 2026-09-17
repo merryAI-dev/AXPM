@@ -1,5 +1,4 @@
 import { agentRuntime } from "../agent-runtime";
-import { localWorkbook } from "./local-files";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { userDoc, storage, ApiError } from "../firebase";
@@ -32,11 +31,6 @@ export async function proposeDrive(
     throw new Error("변경 내용은 400KB 이하여야 합니다.");
   const ws = adapter || (await workspace(uid));
   const preview = await validateCommand(ws, p.command);
-  if (p.command.kind === "workbook.publish") {
-    const source = await localWorkbook(uid, p.command.workbookId);
-    if (source.file.version !== p.command.version)
-      throw new ApiError(409, "게시할 엑셀이 변경되었습니다.");
-  }
   const id = createHash("sha256").update(p.requestId).digest("hex");
   const ref = jobs(uid).doc(id);
   await ref.firestore.runTransaction(async (tx) => {
@@ -157,7 +151,6 @@ export async function processJob(
           await ref.update({ backupPath: objectPath, backupMime: mime });
         },
         async () => {
-          // Durable marker comes before sending the write. A crash afterward is uncertain.
           await ref.firestore.runTransaction(async (tx) => {
             const [current, owner] = await Promise.all([
               tx.get(ref),
@@ -176,15 +169,6 @@ export async function processJob(
             tx.update(ref, { writeStartedAt: now() });
           });
           writeStarted = true;
-        },
-        async () => {
-          const c = commandSchema.parse(job.command);
-          if (c.kind !== "workbook.publish")
-            throw new Error("게시 작업이 아닙니다.");
-          const source = await localWorkbook(uid, c.workbookId);
-          if (source.file.version !== c.version)
-            throw new ApiError(409, "게시할 엑셀이 변경되었습니다.");
-          return source.buffer;
         },
       );
     }
@@ -212,7 +196,6 @@ export async function processJob(
   }
 }
 export async function recoverJobs(uid: string) {
-  // Expired write/agent leases are never automatically replayed.
   const running = await jobs(uid)
     .where("status", "==", "running")
     .limit(100)

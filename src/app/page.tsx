@@ -1,76 +1,82 @@
 "use client";
+
 import { useEffect, useState } from "react";
-import WorkspacePanel from "./workspace-panel";
-import JobsPanel from "./jobs-panel";
-import BridgeSettings from "./bridge-settings";
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
-  GoogleAuthProvider,
   signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   type User,
 } from "firebase/auth";
-import { api, auth, emulator } from "@/lib/client";
-import { defaultMapping, fieldLabels } from "@/lib/report-fields";
-import type { overview } from "@/lib/store";
-type State = Awaited<ReturnType<typeof overview>> & { uid: string };
+import { api, auth } from "@/lib/client";
+import WorkspacePanel from "./workspace-panel";
+import JobsPanel from "./jobs-panel";
+import ReportWatch from "./report-watch";
+import MasterDashboard from "./master-dashboard";
+import MasterStatus from "./master-status";
+import AgentActivity from "./agent-activity";
+import DriveHistory from "./drive-history";
+import MailIntake from "./mail-intake";
+
+type Proposal = {
+  id: string;
+  kind: string;
+  title: string;
+  reason: string;
+  evidenceIds: string[];
+  status: string;
+  fileName?: string;
+  tab?: string;
+  round?: number;
+  error?: string;
+};
+type Run = {
+  id: string;
+  goal: string;
+  summary: string;
+  status: string;
+  trace?: { tool: string; result: string }[];
+};
+type State = {
+  uid: string;
+  proposals: Proposal[];
+  runs: Run[];
+  agentConfigured: boolean;
+  agentRuntime: { engine: string; provider: string; model: string };
+};
+
 const tabs = [
-  { id: "drive", name: "파일 · 보고서 편집", icon: "▱" },
-  { id: "jobs", name: "작업 센터", icon: "◎" },
-  { id: "overview", name: "운영 현황", icon: "◈" },
-  { id: "companies", name: "기업 · 진행 횟수", icon: "▦" },
-  { id: "schedule", name: "멘토 일정", icon: "▤" },
+  { id: "overview", name: "홈 대시보드", icon: "◈" },
+  { id: "drive", name: "Drive · 보고서", icon: "▱" },
+  { id: "automation", name: "자동 반영", icon: "↻" },
   { id: "approvals", name: "승인 대기함", icon: "◇" },
-  { id: "reports", name: "멘토링 보고서", icon: "▧" },
-  { id: "settings", name: "시트 · 연결 설정", icon: "⚙" },
+  { id: "jobs", name: "작업 이력", icon: "◎" },
 ];
-const kindName = (k: string) => (k === "dedicated" ? "전담" : "특화");
+
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null),
-    [loaded, setLoaded] = useState(false),
-    [state, setState] = useState<State | null>(null);
-  const [tab, setTab] = useState("drive"),
-    [busy, setBusy] = useState(""),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState("");
-  const [query, setQuery] = useState(""),
-    [goal, setGoal] = useState(""),
-    [agentBusy, setAgentBusy] = useState(false);
-  const [config, setConfig] = useState<State["settings"] | null>(null),
-    [mapping, setMapping] = useState(defaultMapping),
-    [sheet, setSheet] = useState("");
-  const [reportId, setReportId] = useState(""),
-    [companyId, setCompanyId] = useState(""),
-    [fields, setFields] = useState<Record<string, string>>(
-      Object.fromEntries(Object.keys(defaultMapping).map((k) => [k, ""])),
-    );
-  const [scheduleKind, setScheduleKind] = useState("all");
+  const [user, setUser] = useState<User | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [state, setState] = useState<State | null>(null);
+  const [tab, setTab] = useState("overview");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [goal, setGoal] = useState("");
+  const [agentBusy, setAgentBusy] = useState(false);
+
   async function refresh() {
-    const next: State = await api("state");
-    setState(next);
-    setConfig(next.settings);
-    if (next.template) {
-      setMapping(next.template.mapping);
-      setSheet(next.template.sheet);
-    }
+    setState(await api("state"));
   }
   useEffect(
     () =>
-      onAuthStateChanged(auth, (u) => {
-        setUser(u);
+      onAuthStateChanged(auth, (next) => {
+        setUser(next);
         setLoaded(true);
-        if (u) refresh().catch((e) => setError(e.message));
+        if (next) refresh().catch((e) => setError(e.message));
         else setState(null);
       }),
     [],
   );
-  useEffect(() => {
-    if (!agentBusy) return;
-    const timer = setInterval(() => refresh().catch(() => {}), 5000);
-    return () => clearInterval(timer);
-  }, [agentBusy]);
   async function act(label: string, action: () => Promise<unknown>) {
     setBusy(label);
     setError("");
@@ -86,1059 +92,237 @@ export default function Home() {
     }
   }
   async function login() {
-    await act("로그인", async () => {
-      if (emulator) {
-        try {
-          await signInWithEmailAndPassword(
-            auth,
-            "operator@axpm.test",
-            "local-demo-only-2026",
-          );
-        } catch (e) {
-          if (
-            ["auth/invalid-credential", "auth/user-not-found"].includes(
-              (e as { code: string }).code,
-            )
-          )
-            await createUserWithEmailAndPassword(
-              auth,
-              "operator@axpm.test",
-              "local-demo-only-2026",
-            );
-          else throw e;
-        }
-      } else await signInWithPopup(auth, new GoogleAuthProvider());
-    });
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ hd: "mysc.co.kr" });
+    await act("로그인", () => signInWithPopup(auth, provider));
   }
-  async function run() {
-    if (!goal.trim() || agentBusy) return;
-    const request = goal;
+  async function runAgent() {
+    const request = goal.trim();
+    if (!request || agentBusy) return;
     setGoal("");
     setAgentBusy(true);
     setError("");
     try {
-      const job = await api("jobs/agent", { goal: request });
-      await api("jobs/process", { id: job.id });
+      await api("agent", { goal: request });
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(e instanceof Error ? e.message : "에이전트 실행 실패");
     } finally {
       setAgentBusy(false);
     }
   }
-  const data = state?.snapshot,
-    companies = data?.companies || [],
-    findings = state?.findings || [],
-    pending = state?.proposals.filter((p) => p.status === "pending") || [];
-  const filtered = companies.filter((c) =>
-    `${c.name} ${c.campus} ${c.mentor}`
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
-  const stats = [
-    [
-      "관리 기업",
-      `${companies.length}`,
-      `${companies.filter((c) => c.active).length}개사 진행 대상`,
-    ],
-    [
-      "전담 완료",
-      `${companies.reduce((n, c) => n + c.regular, 0)}`,
-      "원본 완료 체크 재집계",
-    ],
-    [
-      "특화 완료 표시",
-      `${companies.reduce((sum, c) => sum + c.specialtyCount, 0)}`,
-      "기업별 체크 기준 · 실제 시수 별도",
-    ],
-    [
-      "확인할 항목",
-      `${findings.filter((f) => f.severity !== "info").length}`,
-      `승인 대기 ${pending.length}건`,
-    ],
-  ];
-  const sourceTime = data
-    ? new Date(data.importedAt).toLocaleString("ko-KR", {
-        timeZone: "Asia/Seoul",
-      })
-    : "아직 연결된 시트가 없습니다";
+
   if (!loaded)
-    return (
-      <main className="login">
-        <p>운영실을 여는 중입니다…</p>
-      </main>
-    );
+    return <main className="loginPage">운영 환경을 확인하고 있습니다…</main>;
   if (!user)
     return (
-      <main className="login">
-        <div className="loginCard">
-          <span className="eyebrow">AXPM / MENTORING OPERATIONS</span>
-          <h1>
-            시트는 그대로.
-            <br />
-            운영에는 에이전트를.
-          </h1>
-          <p>
-            전담·특화 멘토링 신청과 진행 상황을 살피고,
-            <br />
-            다음 조치를 함께 결정하는 운영실입니다.
-          </p>
-          <button className="primary" onClick={login} disabled={!!busy}>
-            {emulator ? "로컬 검증 계정으로 시작" : "Google 계정으로 로그인"}
+      <main className="loginPage">
+        <section className="loginCard">
+          <span className="eyebrow">AXPM OPERATIONS</span>
+          <h1>멘토링 운영 에이전트</h1>
+          <p>MYSC Google 계정으로 로그인해주세요.</p>
+          {error && <p className="banner error">{error}</p>}
+          <button className="primary" disabled={!!busy} onClick={login}>
+            Google로 로그인
           </button>
-          <small>
-            {emulator
-              ? "Firebase Auth · Firestore 에뮬레이터 모드"
-              : "로그인 후 Sheets·Gmail·Calendar 권한을 각각 연결합니다."}
-          </small>
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
-        </div>
+        </section>
       </main>
     );
+
+  const proposals = (state?.proposals || []).filter(
+    (proposal) => proposal.kind === "master_reversal",
+  );
+  const pending = proposals.filter((proposal) => proposal.status === "pending");
+
   return (
-    <div className="shell">
+    <div className="appShell">
       <aside className="sidebar">
         <a className="brand" href="/">
-          AX<span>PM</span>
-          <small>MENTORING OPERATIONS</small>
+          <strong>AXPM</strong>
+          <span>MENTORING OPERATIONS</span>
         </a>
-        <div className="workspace">
-          <span className="dot" />
-          중장년 창업컨설팅<small>2026 · 운영 에이전트</small>
-        </div>
         <nav>
-          {tabs.map((t) => (
+          {tabs.map((item) => (
             <button
-              key={t.id}
-              className={tab === t.id ? "selected" : ""}
-              onClick={() => setTab(t.id)}
+              key={item.id}
+              className={tab === item.id ? "active" : ""}
+              onClick={() => setTab(item.id)}
             >
-              <span>{t.icon}</span>
-              {t.name}
-              {t.id === "approvals" && pending.length > 0 && (
-                <b>{pending.length}</b>
+              <span>{item.icon}</span>
+              {item.name}
+              {item.id === "approvals" && pending.length > 0 && (
+                <small>{pending.length}</small>
               )}
             </button>
           ))}
         </nav>
-        <div className="sideBottom">
-          <span className="mode">
-            {emulator ? "로컬 Firebase 검증 환경" : "Firebase 연결 환경"}
-          </span>
+        <div className="account">
+          <small>운영 계정</small>
           <p>{user.email}</p>
           <button onClick={() => signOut(auth)}>로그아웃 ↗</button>
         </div>
       </aside>
+
       <main className="main">
-        <header>
+        <header className="topbar">
           <div>
             <span className="eyebrow">OPERATIONS WORKSPACE</span>
-            <h1>{tabs.find((t) => t.id === tab)?.name}</h1>
+            <h1>{tabs.find((item) => item.id === tab)?.name}</h1>
           </div>
-          <button
-            className="secondary"
-            disabled={!!busy || !config?.sheetUrls.mentor}
-            onClick={() => act("시트 동기화", () => api("sync", {}))}
-          >
-            ↻ 시트 동기화
-          </button>
         </header>
-        <div className="syncLine">
-          <span className="dot" />
-          최근 읽기 {sourceTime}
-          <span>기존 시트에서 계속 신청·기록하세요</span>
-        </div>
-        {error && (
-          <div className="banner error" role="alert">
-            {error}
-            <button onClick={() => setError("")}>닫기</button>
-          </div>
-        )}
-        {notice && (
-          <div className="banner success" role="status">
-            {notice}
-          </div>
-        )}
-        {busy && (
-          <div className="banner" role="status">
-            {busy} 중…
-          </div>
-        )}
+        {error && <div className="banner error">{error}</div>}
+        {notice && <div className="banner success">{notice}</div>}
         <div className="contentGrid">
           <section className="content">
-            {tab === "drive" && <WorkspacePanel />}
-            {tab === "jobs" && <JobsPanel />}
             {tab === "overview" && (
               <>
-                <div className="intro">
-                  <span className="eyebrow">TODAY’S BRIEF</span>
-                  <h2>
-                    확인이 필요한 일을
-                    <br />
-                    먼저 살펴보세요.
-                  </h2>
-                  <p>
-                    신청과 완료를 구분하고, 판단의 근거를 원본 셀까지
-                    연결합니다.
-                  </p>
-                </div>
-                <div className="stats">
-                  {stats.map(([label, value, detail]) => (
-                    <article key={label}>
-                      <span>{label}</span>
-                      <strong>
-                        {value}
-                        <small>{label === "관리 기업" ? "개사" : "건"}</small>
-                      </strong>
-                      <p>{detail}</p>
-                    </article>
-                  ))}
-                </div>
-                <section className="panel">
-                  <div className="panelTitle">
-                    <h2>우선 확인할 항목</h2>
-                    <span>{findings.length}개 항목</span>
-                  </div>
-                  {findings.length ? (
-                    findings
-                      .filter((f) => f.severity !== "info")
-                      .slice(0, 12)
-                      .map((f) => (
-                        <article className="finding" key={f.id}>
-                          <span className={`severity ${f.severity}`}>
-                            {f.severity === "high" ? "우선 확인" : "확인 필요"}
-                          </span>
-                          <div>
-                            <strong>
-                              {f.title}{" "}
-                              <span>
-                                {
-                                  companies.find((c) => c.id === f.companyId)
-                                    ?.name
-                                }
-                              </span>
-                            </strong>
-                            <p>{f.detail}</p>
-                            <small>
-                              {f.evidenceIds
-                                .map((id) => {
-                                  const e = data?.evidence.find(
-                                    (e) => e.id === id,
-                                  );
-                                  return e ? `${e.sheet} · ${e.cell}` : id;
-                                })
-                                .join(" / ")}
-                            </small>
-                          </div>
-                        </article>
-                      ))
-                  ) : (
-                    <Empty
-                      title="시트를 연결하면 점검을 시작합니다."
-                      detail="연결 설정에서 Google 시트 URL을 등록하거나 기존 엑셀 파일을 불러오세요."
-                    />
-                  )}
-                </section>
+                <MasterDashboard />
+                <AgentActivity visible />
+                <DriveHistory visible />
               </>
             )}
-            {tab === "companies" && (
-              <section className="panel">
-                <div className="panelTitle">
-                  <h2>기업별 멘토링 현황</h2>
-                  <input
-                    placeholder="기업명 · 캠퍼스 · 멘토 검색"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                </div>
-                <p className="hint">
-                  전담 회차와 특화 완료 표시를 구분합니다. 잔여 티켓은 대화로
-                  지정한 값이며 자동 부여하지 않습니다.
-                </p>
-                <div className="tableWrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>기업 / 소속</th>
-                        <th>담당 멘토</th>
-                        <th>전담 완료</th>
-                        <th>특화</th>
-                        <th>잔여 티켓</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((c) => (
-                        <tr key={c.id}>
-                          <td>
-                            <strong>{c.name}</strong>
-                            <small>
-                              {c.campus} · {c.category}
-                            </small>
-                          </td>
-                          <td>{c.mentor || "미배정"}</td>
-                          <td>
-                            <div className="rounds">
-                              {c.rounds.map((r) => (
-                                <span
-                                  title={`${r.round}회차 ${r.complete ? "완료" : "미완료"} / 보고서 ${r.report || "기록 없음"}`}
-                                  className={r.complete ? "complete" : ""}
-                                  key={r.round}
-                                >
-                                  {r.round}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td>
-                            <span
-                              className={`badge ${c.specialty ? "green" : ""}`}
-                            >
-                              {c.specialty
-                                ? `${c.specialtyCount}건 완료 표시`
-                                : c.assigned
-                                  ? "배정"
-                                  : c.requested
-                                    ? "요청"
-                                    : "기록 없음"}
-                            </span>
-                          </td>
-                          <td>
-                            {["dedicated", "specialty"].map((kind) => {
-                              const ticket = state?.tickets.find(
-                                (t) => t.companyId === c.id && t.kind === kind,
-                              );
-                              return (
-                                <small key={kind}>
-                                  {kindName(kind)}{" "}
-                                  {ticket?.remainingTickets ?? "미설정"}
-                                  {ticket?.remainingHours != null
-                                    ? ` / ${ticket.remainingHours}시간`
-                                    : ""}
-                                  {ticket && ticket.snapshotId !== data?.id
-                                    ? " · 재확인 필요"
-                                    : ""}
-                                </small>
-                              );
-                            })}
-                            <button
-                              className="textButton"
-                              onClick={() =>
-                                setGoal(
-                                  `${c.name}의 전담·특화 진행 횟수와 남은 티켓을 확인해줘.`,
-                                )
-                              }
-                            >
-                              에이전트에게 확인 ↗
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+            {tab === "drive" && (
+              <>
+                <MailIntake />
+                <WorkspacePanel />
+                <DriveHistory visible />
+              </>
             )}
-            {tab === "schedule" && (
-              <section className="panel">
-                <div className="panelTitle">
-                  <h2>전담·특화 신청 일정</h2>
-                  <select
-                    value={scheduleKind}
-                    onChange={(e) => setScheduleKind(e.target.value)}
-                  >
-                    <option value="all">전체 일정</option>
-                    <option value="dedicated">전담 멘토링</option>
-                    <option value="specialty">특화 멘토링</option>
-                  </select>
-                </div>
-                <p className="hint">
-                  원본 신청 시트를 읽은 일정입니다. 지난 신청도 완료로 자동
-                  전환하지 않습니다.
-                </p>
-                <div className="tableWrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>일자 / 시간</th>
-                        <th>유형</th>
-                        <th>기업</th>
-                        <th>멘토 / 신청 시트</th>
-                        <th>상태</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...(data?.appointments || [])]
-                        .filter(
-                          (a) =>
-                            scheduleKind === "all" || a.kind === scheduleKind,
-                        )
-                        .sort((a, b) => b.date.localeCompare(a.date))
-                        .map((a) => (
-                          <tr key={a.id}>
-                            <td>
-                              {a.date || "일자 확인"}
-                              <small>{a.time || "시간 협의"}</small>
-                            </td>
-                            <td>{kindName(a.kind)}</td>
-                            <td>
-                              {a.company}
-                              <small>
-                                {a.companyId
-                                  ? "기업 연결됨"
-                                  : "기업 연결 확인 필요"}
-                              </small>
-                            </td>
-                            <td>{a.mentor}</td>
-                            <td>
-                              <span
-                                className={`badge ${a.status === "review" ? "amber" : ""}`}
-                              >
-                                {a.status === "review"
-                                  ? "확인 필요"
-                                  : a.status === "scheduled"
-                                    ? "신청 기록"
-                                    : a.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+            {tab === "automation" && (
+              <>
+                <ReportWatch visible />
+                <MasterStatus visible />
+              </>
             )}
+            {tab === "jobs" && <JobsPanel />}
             {tab === "approvals" && (
               <section className="panel">
                 <div className="panelTitle">
-                  <h2>실행 전 확인</h2>
+                  <h2>자동 반영 취소</h2>
                   <span>{pending.length}건 대기</span>
                 </div>
                 <p className="hint">
-                  수신자·내용·변경량을 확인한 후 승인해주세요. Gmail 발송과
-                  Calendar 초대는 승인 시 실제 실행됩니다.
+                  보고서 탭이나 필수값이 제거된 경우에만 제안됩니다. 승인하면
+                  에이전트가 기록한 마스터 셀만 원복합니다.
                 </p>
-                {state?.proposals.length ? (
-                  state.proposals.map((p) => (
-                    <article className="proposal" key={p.id}>
+                {proposals.length ? (
+                  proposals.map((proposal) => (
+                    <article className="proposal" key={proposal.id}>
                       <div className="panelTitle">
-                        <span className="badge">
-                          {p.kind === "ticket"
-                            ? "티켓 조정"
-                            : p.kind === "email"
-                              ? "Gmail 발송"
-                              : "Calendar 일정 초대"}
-                        </span>
-                        <small>{p.status}</small>
+                        <span className="badge">자동 반영 취소</span>
+                        <small>{proposal.status}</small>
                       </div>
-                      <h3>{p.title}</h3>
-                      <p>{p.reason}</p>
-                      {p.kind === "ticket" ? (
-                        <div className="changeBox">
-                          {kindName(p.ticketKind || "")} ·{" "}
-                          {p.ticketMode === "set"
-                            ? "잔여 수량 지정"
-                            : "잔여 수량 증감"}
-                          <strong>
-                            {p.ticketDelta != null ? `${p.ticketDelta}회` : ""}{" "}
-                            {p.hoursDelta != null ? `${p.hoursDelta}시간` : ""}
-                          </strong>
-                        </div>
-                      ) : (
-                        <>
-                          <p>
-                            <b>받는 사람</b> {p.to}
-                          </p>
-                          <p>
-                            <b>제목</b> {p.subject}
-                          </p>
-                          {p.kind === "calendar" && (
-                            <p>
-                              {p.start} → {p.end}
-                            </p>
-                          )}
-                          <pre>{p.body}</pre>
-                        </>
-                      )}
+                      <h3>{proposal.title}</h3>
+                      <p>{proposal.reason}</p>
+                      <div className="changeBox">
+                        {proposal.fileName || "멘토링 보고서"} ·{" "}
+                        {proposal.tab || `${proposal.round}회차`}
+                        <strong>완료 체크·작성일·자동 메모 원복</strong>
+                      </div>
                       <details>
                         <summary>판단 근거</summary>
-                        {p.evidenceIds.map((id: string) => (
-                          <p key={id}>
-                            {data?.evidence.find((e) => e.id === id)?.detail ||
-                              id}
-                          </p>
+                        {proposal.evidenceIds.map((id) => (
+                          <p key={id}>{id}</p>
                         ))}
                       </details>
-                      {p.error && <p className="error">{p.error}</p>}
-                      {p.status === "pending" && (
+                      {proposal.error && <p className="error">{proposal.error}</p>}
+                      {proposal.status === "pending" && (
                         <div className="actions">
                           <button
                             className="secondary"
                             disabled={!!busy}
                             onClick={() =>
-                              act("제안 거절", () =>
-                                api("proposal", { id: p.id, approve: false }),
+                              act("취소 제안 거절", () =>
+                                api("proposal", {
+                                  id: proposal.id,
+                                  approve: false,
+                                }),
                               )
                             }
                           >
-                            거절
+                            유지
                           </button>
                           <button
                             className="primary"
                             disabled={!!busy}
                             onClick={() =>
-                              act("제안 승인·실행", () =>
-                                api("proposal", { id: p.id, approve: true }),
+                              act("자동 반영 취소", () =>
+                                api("proposal", {
+                                  id: proposal.id,
+                                  approve: true,
+                                }),
                               )
                             }
                           >
-                            {p.kind === "ticket"
-                              ? "변경 확정"
-                              : p.kind === "email"
-                                ? "승인하고 메일 발송"
-                                : "승인하고 일정 초대"}
+                            승인하고 반영 취소
                           </button>
                         </div>
                       )}
                     </article>
                   ))
                 ) : (
-                  <Empty
-                    title="승인을 기다리는 제안이 없습니다."
-                    detail="에이전트와 대화해 메일·일정·티켓 조정을 제안받으세요."
-                  />
+                  <div className="emptyState">
+                    <h3>승인을 기다리는 취소 제안이 없습니다.</h3>
+                    <p>보고서 변경은 자동 점검 후 이곳에 표시됩니다.</p>
+                  </div>
                 )}
               </section>
-            )}
-            {tab === "reports" && (
-              <section className="panel">
-                <div className="panelTitle">
-                  <h2>원본 양식으로 보고서 작성</h2>
-                  <span className="badge">셀 매핑 · XLSX</span>
-                </div>
-                <p className="hint">
-                  업로드한 원본 템플릿의 지정 셀에만 값을 채웁니다. 초안은 검토
-                  후 저장·다운로드하세요.
-                </p>
-                <label>
-                  기존 보고서
-                  <select
-                    value={reportId}
-                    onChange={(e) => {
-                      setReportId(e.target.value);
-                      const r = state?.reports.find(
-                        (x) => x.id === e.target.value,
-                      );
-                      if (r) {
-                        setCompanyId(r.companyId);
-                        setFields(r.fields);
-                      }
-                    }}
-                  >
-                    <option value="">새 보고서</option>
-                    {state?.reports.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.fields.company} · {r.fields.topic?.slice(0, 25)} ·{" "}
-                        {r.status}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  기업
-                  <select
-                    value={companyId}
-                    onChange={(e) => {
-                      const c = companies.find((c) => c.id === e.target.value);
-                      setCompanyId(e.target.value);
-                      setReportId("");
-                      setFields({
-                        ...Object.fromEntries(
-                          Object.keys(defaultMapping).map((k) => [k, ""]),
-                        ),
-                        company: c?.name || "",
-                        mentor: c?.mentor || "",
-                        representative:
-                          data?.evidence.find(
-                            (x) => x.id === `${c?.id}-representative`,
-                          )?.detail || "",
-                      });
-                    }}
-                  >
-                    <option value="">기업을 선택하세요</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {state?.template?.imageCount ? (
-                  <p className="hint">
-                    원본 템플릿의 사진 {state.template.imageCount}개도 그대로
-                    유지됩니다. 이번 보고서에 맞는 사진인지 확인해주세요.
-                  </p>
-                ) : null}
-                <div className="reportFields">
-                  {Object.entries(fieldLabels).map(([key, label]) => (
-                    <label
-                      key={key}
-                      className={
-                        ["companyStatus", "discussion", "nextPlan"].includes(
-                          key,
-                        )
-                          ? "wide"
-                          : ""
-                      }
-                    >
-                      <span>
-                        {label}
-                        <small>
-                          {state?.template?.mapping[key] || defaultMapping[key]}
-                        </small>
-                      </span>
-                      {[
-                        "companyStatus",
-                        "discussion",
-                        "nextPlan",
-                        "datePlace",
-                        "attendees",
-                        "topic",
-                      ].includes(key) ? (
-                        <textarea
-                          value={fields[key] || ""}
-                          onChange={(e) =>
-                            setFields({ ...fields, [key]: e.target.value })
-                          }
-                          rows={key === "discussion" ? 7 : 3}
-                        />
-                      ) : (
-                        <input
-                          value={fields[key] || ""}
-                          readOnly={key === "company"}
-                          onChange={(e) =>
-                            setFields({ ...fields, [key]: e.target.value })
-                          }
-                        />
-                      )}
-                    </label>
-                  ))}
-                </div>
-                <div className="actions">
-                  <button
-                    className="secondary"
-                    disabled={!!busy || !companyId}
-                    onClick={() =>
-                      act("보고서 저장", async () => {
-                        const result = await api("report", {
-                          id: reportId || undefined,
-                          companyId,
-                          fields,
-                        });
-                        setReportId(result.id);
-                      })
-                    }
-                  >
-                    검토 내용 저장
-                  </button>
-                  <button
-                    className="primary"
-                    disabled={!!busy || !companyId || !state?.template}
-                    onClick={() =>
-                      act("원본 양식 다운로드", async () => {
-                        const saved = await api("report", {
-                          id: reportId || undefined,
-                          companyId,
-                          fields,
-                        });
-                        setReportId(saved.id);
-                        const blob = await api(
-                          "report/download",
-                          { id: saved.id },
-                          true,
-                        );
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `멘토링 보고서_${fields.company.replace(/[\\/:*?"<>|]/g, "_")}.xlsx`;
-                        a.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
-                      })
-                    }
-                  >
-                    검토 완료 · 엑셀 다운로드 ↓
-                  </button>
-                </div>
-                {!state?.template && (
-                  <p className="hint">
-                    연결 설정에서 보고서 원본 템플릿을 먼저 업로드해주세요.
-                  </p>
-                )}
-              </section>
-            )}
-            {tab === "settings" && config && (
-              <>
-                <BridgeSettings />
-                <section className="panel">
-                  <div className="panelTitle">
-                    <h2>Google 연결</h2>
-                    <span
-                      className={`badge ${state?.google.connected ? "green" : ""}`}
-                    >
-                      {state?.google.connected ? "연결됨" : "권한 동의 필요"}
-                    </span>
-                  </div>
-                  <p>로그인과 별도로 필요한 서비스의 접근 권한을 선택합니다.</p>
-                  <div className="connections">
-                    {[
-                      [
-                        "drive",
-                        "Google Drive · Sheets 편집",
-                        "관리 폴더 탐색 · 승인 후 파일과 셀 변경",
-                      ],
-                      ["sheets", "Google Sheets", "기존 신청·마스터시트 읽기"],
-                      ["gmail", "Gmail", "업무 메일 읽기 · 승인 후 발송"],
-                      [
-                        "calendar",
-                        "Google Calendar",
-                        "연결 계정 일정 조회 · 승인 후 초대",
-                      ],
-                    ].map(([cap, label, detail]) => (
-                      <article key={cap}>
-                        <h3>{label}</h3>
-                        <p>{detail}</p>
-                        <button
-                          className="secondary"
-                          disabled={!!busy || !state?.googleConfigured}
-                          onClick={() =>
-                            act(`${label} 연결`, async () => {
-                              const result = await api("google/connect", {
-                                capability: cap,
-                              });
-                              window.location.assign(result.url);
-                            })
-                          }
-                        >
-                          권한 동의하고 연결 ↗
-                        </button>
-                      </article>
-                    ))}
-                  </div>
-                  {!state?.googleConfigured && (
-                    <p className="hint">
-                      Google Cloud OAuth 클라이언트와 토큰 암호화 키 설정 후
-                      연결할 수 있습니다.
-                    </p>
-                  )}
-                  {state?.google.connected && (
-                    <button
-                      className="textButton"
-                      onClick={() =>
-                        act("Google 연결 해제", () =>
-                          api("google/disconnect", {}),
-                        )
-                      }
-                    >
-                      Google 연결 전체 해제
-                    </button>
-                  )}
-                </section>
-                <section className="panel">
-                  <h2>모니터링할 원본 시트</h2>
-                  {[
-                    ["mentor", "멘토용 기업관리 마스터"],
-                    ["applications", "특화 멘토링 신청"],
-                    ["dedicated", "전담 멘토링 신청"],
-                    ["internal", "내부 마스터 · 선택"],
-                  ].map(([role, label]) => (
-                    <label key={role}>
-                      {label}
-                      <input
-                        value={
-                          config.sheetUrls[
-                            role as keyof typeof config.sheetUrls
-                          ]
-                        }
-                        placeholder="https://docs.google.com/spreadsheets/d/…"
-                        onChange={(e) =>
-                          setConfig({
-                            ...config,
-                            sheetUrls: {
-                              ...config.sheetUrls,
-                              [role]: e.target.value,
-                            },
-                          })
-                        }
-                      />
-                    </label>
-                  ))}
-                  <label>
-                    Gmail 업무 검색 범위
-                    <input
-                      placeholder="예: label:중장년 newer_than:90d"
-                      value={config.gmailQuery}
-                      onChange={(e) =>
-                        setConfig({ ...config, gmailQuery: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    기업당 모니터링 목표 횟수 · 전담+특화
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={config.targetPerCompany}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          targetPerCompany: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={config.monitoringEnabled}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          monitoringEnabled: e.target.checked,
-                        })
-                      }
-                    />
-                    정기 점검 허용
-                  </label>
-                  <p className="hint">
-                    정기 점검 허용 후 Cloud Scheduler 연결이 필요합니다. 이
-                    설정만으로 스케줄러가 생성되지는 않습니다.
-                  </p>
-                  <button
-                    className="primary"
-                    disabled={!!busy}
-                    onClick={() =>
-                      act("연결 설정 저장", () => api("settings", config))
-                    }
-                  >
-                    설정 저장
-                  </button>
-                </section>
-                <section className="panel">
-                  <h2>엑셀 스냅샷 가져오기</h2>
-                  <p className="hint">
-                    API 연결 전 검증용입니다. 원본 파일은 변경하지 않고 필요한
-                    멘토링 데이터만 Firebase에 저장합니다.
-                  </p>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const form = new FormData(e.currentTarget);
-                      act("엑셀 읽기", () => api("import", form));
-                    }}
-                  >
-                    {[
-                      ["mentor", "멘토용 마스터 · 필수"],
-                      ["applications", "특화 신청 · 필수"],
-                      ["dedicated", "전담 신청"],
-                      ["internal", "내부 마스터"],
-                    ].map(([role, label]) => (
-                      <label key={role}>
-                        {label}
-                        <input
-                          type="file"
-                          name={role}
-                          accept=".xlsx"
-                          required={
-                            role === "mentor" || role === "applications"
-                          }
-                        />
-                      </label>
-                    ))}
-                    <button className="secondary" disabled={!!busy}>
-                      스냅샷 가져오기
-                    </button>
-                  </form>
-                </section>
-                <section className="panel">
-                  <h2>보고서 원본 · 셀 매핑</h2>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const form = new FormData(e.currentTarget);
-                      act("보고서 템플릿 저장", () => api("template", form));
-                    }}
-                  >
-                    <label>
-                      멘토링 보고서 원본 (.xlsx)
-                      <input name="file" type="file" accept=".xlsx" required />
-                    </label>
-                    <button className="secondary" disabled={!!busy}>
-                      템플릿 업로드
-                    </button>
-                  </form>
-                  {state?.template && (
-                    <>
-                      <p>{state.template.name}</p>
-                      <label>
-                        값을 채울 시트
-                        <select
-                          value={sheet}
-                          onChange={(e) => setSheet(e.target.value)}
-                        >
-                          {state.template.sheets.map((s: string) => (
-                            <option key={s}>{s}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="mapping">
-                        {Object.entries(fieldLabels).map(([key, label]) => (
-                          <label key={key}>
-                            {label}
-                            <input
-                              value={mapping[key] || ""}
-                              onChange={(e) =>
-                                setMapping({
-                                  ...mapping,
-                                  [key]: e.target.value.toUpperCase(),
-                                })
-                              }
-                            />
-                          </label>
-                        ))}
-                      </div>
-                      <button
-                        className="primary"
-                        disabled={!!busy}
-                        onClick={() =>
-                          act("셀 매핑 저장", () =>
-                            api("template/mapping", { sheet, mapping }),
-                          )
-                        }
-                      >
-                        매핑 확인·저장
-                      </button>
-                    </>
-                  )}
-                </section>
-              </>
             )}
           </section>
           <aside className="agentPanel">
-            <div className="agentHeading">
-              <div className="agentAvatar">✳</div>
+            <div className="agentHeader">
+              <span>✳</span>
               <div>
                 <h2>운영 에이전트</h2>
-                <span>
-                  {agentBusy
-                    ? "자료를 확인하고 있습니다"
-                    : state?.agentConfigured
-                      ? `${state.agentRuntime.provider} · ${state.agentRuntime.model}`
-                      : "모델 연결 대기"}
-                </span>
+                <small>
+                  {state?.agentConfigured
+                    ? `${state.agentRuntime.engine} · ${state.agentRuntime.provider}`
+                    : "모델 연결 필요"}
+                </small>
               </div>
             </div>
             <p className="agentIntro">
-              현황을 묻고, 다음 조치를 함께 정하세요. 실행이 필요한 일은 승인
-              대기함으로 보냅니다.
+              마스터와 Drive 원본을 조회하고 멘토링 자동화 상태를 확인합니다.
             </p>
-            <div className="quickPrompts">
-              {[
-                "미신청 기업과 보고서 누락을 정리해줘",
-                "전담·특화 진행 횟수와 이번 주 일정을 보고해줘",
-                "남은 티켓을 조정하고 싶어",
-              ].map((p) => (
-                <button key={p} onClick={() => setGoal(p)}>
-                  {p} ↗
-                </button>
-              ))}
-            </div>
-            <div className="conversation">
-              {[...(state?.runs || [])].reverse().map((r) => (
-                <div className="exchange" key={r.id}>
-                  <div className="userMessage">{r.goal}</div>
-                  <div className="agentMessage">
-                    <small>
-                      {r.engine || "builtin"} · {r.provider || "모델 미기록"} ·{" "}
-                      {r.status === "running"
-                        ? "확인 중"
-                        : r.status === "failed"
-                          ? "확인 필요"
-                          : "보고"}
-                    </small>
-                    <p>
-                      {r.summary || "시트와 업무 근거를 확인하고 있습니다…"}
-                    </p>
-                    {r.trace?.length > 0 && (
-                      <details>
-                        <summary>사용한 도구 {r.trace.length}개</summary>
-                        {r.trace.map(
-                          (t: { tool: string; result: string }, i: number) => (
-                            <small key={i}>
-                              {t.tool} · {t.result}
-                            </small>
-                          ),
-                        )}
-                      </details>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {(state?.runs || []).slice(0, 5).map((run) => (
+              <article className="message assistant" key={run.id}>
+                <strong>{run.goal}</strong>
+                <p>{run.summary || run.status}</p>
+                {run.trace?.length ? (
+                  <details>
+                    <summary>사용한 도구 {run.trace.length}개</summary>
+                    {run.trace.map((item, index) => (
+                      <p key={index}>
+                        {item.tool} · {item.result}
+                      </p>
+                    ))}
+                  </details>
+                ) : null}
+              </article>
+            ))}
             <form
-              className="composer"
-              onSubmit={(e) => {
-                e.preventDefault();
-                run();
+              className="agentComposer"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runAgent();
               }}
             >
               <textarea
-                aria-label="에이전트에게 요청"
-                rows={4}
-                placeholder={
-                  "예: ○○기업의 특화 잔여 티켓을 2회로 지정해줘. 사유는 추가 컨설팅 지원이야."
-                }
                 value={goal}
-                onChange={(e) => setGoal(e.target.value)}
+                onChange={(event) => setGoal(event.target.value)}
+                placeholder="에이전트에게 요청"
               />
-              <div>
-                <small>
-                  {state?.agentConfigured
-                    ? "Hermes 실행 설정됨 · 변경은 승인 후 실행"
-                    : "Gemini 키·모델 설정 후 Hermes 실행"}
-                </small>
-                <button
-                  className="primary"
-                  disabled={
-                    agentBusy ||
-                    !state?.agentConfigured ||
-                    !data ||
-                    !goal.trim()
-                  }
-                >
-                  요청 ↑
-                </button>
-              </div>
+              <button
+                className="primary"
+                disabled={agentBusy || !state?.agentConfigured || !goal.trim()}
+              >
+                {agentBusy ? "확인 중…" : "요청 ↑"}
+              </button>
             </form>
           </aside>
         </div>
-        <footer>
-          AXPM · 기존 시트 위에서 일하는 운영 에이전트{" "}
-          <span>정산 기능은 별도 확장 예정</span>
-        </footer>
+        <footer>AXPM · 멘토링 운영 에이전트</footer>
       </main>
-    </div>
-  );
-}
-function Empty({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div className="empty">
-      <span>◈</span>
-      <h3>{title}</h3>
-      <p>{detail}</p>
     </div>
   );
 }

@@ -6,6 +6,10 @@ try {
 } catch {
   /* Use supplied environment. */
 }
+if (!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY_FILE)
+  process.env.GEMINI_API_KEY = (
+    await readFile(process.env.GEMINI_API_KEY_FILE, "utf8")
+  ).trim();
 const args = process.argv.slice(2);
 if (
   args[0] === "chat" &&

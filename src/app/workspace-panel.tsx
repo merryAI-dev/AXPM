@@ -12,12 +12,6 @@ import {
   type Mapping,
   type Command,
 } from "@/lib/workspace/schema";
-type LocalFile = {
-  id: string;
-  name: string;
-  version: string;
-  updatedAt: string;
-};
 type EditorData = {
   view?: SheetView;
   file: { id: string; name: string; mimeType?: string };
@@ -47,6 +41,7 @@ export default function WorkspacePanel() {
   const [status, setStatus] = useState<{
     config: { rootId: string; label: string } | null;
     connected: boolean;
+    connectionError?: string;
     index: {
       count: number;
       folders: number;
@@ -55,9 +50,8 @@ export default function WorkspacePanel() {
     } | null;
   } | null>(null);
   const [root, setRoot] = useState(""),
-    [rootLabel, setRootLabel] = useState("사업 공유 폴더");
-  const [files, setFiles] = useState<DriveFile[]>([]),
-    [locals, setLocals] = useState<LocalFile[]>([]);
+    [rootLabel, setRootLabel] = useState("");
+  const [files, setFiles] = useState<DriveFile[]>([]);
   const [trail, setTrail] = useState<{ id: string; name: string }[]>([]),
     [next, setNext] = useState("");
   const [trashed, setTrashed] = useState(false),
@@ -66,10 +60,7 @@ export default function WorkspacePanel() {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
-  const [editor, setEditor] = useState<{
-    id: string;
-    source: "drive" | "local";
-  } | null>(null);
+  const [editor, setEditor] = useState<{ id: string } | null>(null);
   const [action, setAction] = useState<{
       kind:
         | "folder.create"
@@ -80,13 +71,16 @@ export default function WorkspacePanel() {
       file?: DriveFile;
     } | null>(null),
     [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [indexing, setIndexing] = useState(false);
+  const [indexError, setIndexError] = useState("");
+  const activeRoot = status?.connected ? status.config?.rootId : undefined;
   const parent = trail.at(-1)?.id || status?.config?.rootId || "";
   async function refresh() {
-    const [s, l] = await Promise.all([api("drive/status"), api("workbooks")]);
+    const s = await api("drive/status");
     setStatus(s);
-    setLocals(l);
     setRoot(s.config?.rootId || "");
-    setRootLabel(s.config?.label || "사업 공유 폴더");
+    setRootLabel(s.config?.label || "");
   }
   async function act(fn: () => Promise<void>) {
     setBusy(true);
@@ -101,7 +95,44 @@ export default function WorkspacePanel() {
     }
   }
   useEffect(() => {
-    refresh().catch((e) => setError(e.message));
+    refresh()
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => {
+    if (!activeRoot) return;
+    let cancelled = false;
+    setLoading(true);
+    setFiles([]);
+    setQuery("");
+    setTrashed(false);
+    const breadcrumb = [{ id: activeRoot, name: status!.config!.label }];
+    api(`drive/list?parent=${encodeURIComponent(activeRoot)}`)
+      .then((data) => {
+        if (cancelled) return;
+        setFiles(data.files);
+        setTrail(breadcrumb);
+        setNext(data.nextPageToken);
+        setSearchMode(false);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRoot]);
+  useEffect(() => {
+    const update = (event: Event) => {
+      const index = (event as CustomEvent).detail;
+      setIndexing(!index.complete);
+      setStatus((s) => (s ? { ...s, index } : s));
+    };
+    window.addEventListener("axpm:drive-index", update);
+    return () => window.removeEventListener("axpm:drive-index", update);
   }, []);
   async function browse(
     id: string,
@@ -118,14 +149,34 @@ export default function WorkspacePanel() {
     setSearchMode(false);
   }
   async function search(cursor = "") {
-    const data = await api(
-      `drive/search?q=${encodeURIComponent(query)}&cursor=${encodeURIComponent(cursor)}`,
-    );
-    setFiles(cursor ? (prev) => [...prev, ...data.files] : data.files);
-    setNext(data.nextCursor);
+    if (!query.trim()) {
+      await browse(
+        status!.config!.rootId,
+        [{ id: status!.config!.rootId, name: status!.config!.label }],
+        "",
+        false,
+      );
+      setTrashed(false);
+      return;
+    }
+    const matches: DriveFile[] = [];
+    let nextCursor = cursor;
+    do {
+      const data = await api(
+        `drive/search?q=${encodeURIComponent(query.trim())}&cursor=${encodeURIComponent(nextCursor)}`,
+      );
+      matches.push(...data.files);
+      nextCursor = data.nextCursor;
+    } while (nextCursor && matches.length < 100);
+    setFiles(cursor ? (prev) => [...prev, ...matches] : matches);
+    setNext(nextCursor);
     setSearchMode(true);
+    setTrashed(false);
+    setTrail([{ id: status!.config!.rootId, name: status!.config!.label }]);
     setNotice(
-      `폴더 조사본에서 검색했습니다. ${data.complete ? "조사 완료" : "조사 중인 범위의 결과"}`,
+      status?.index?.complete
+        ? "사업 폴더 전체에서 이름으로 검색했습니다."
+        : "하위 폴더를 읽고 있습니다. 검색 목록이 준비되면 다시 검색할 수 있어요.",
     );
   }
   async function propose() {
@@ -156,7 +207,6 @@ export default function WorkspacePanel() {
   if (editor)
     return (
       <WorkbookEditor
-        source={editor.source}
         id={editor.id}
         onClose={() => {
           setEditor(null);
@@ -178,9 +228,18 @@ export default function WorkspacePanel() {
         </div>
         <div className="connectionMark">
           <span className={`badge ${status?.connected ? "green" : ""}`}>
-            {status?.connected ? "Drive 권한 연결됨" : "Drive 연결 보류"}
+            {!status
+              ? "Drive 연결 확인 중"
+              : status.connected
+                ? "Drive 연결됨"
+                : "Drive 연결 확인 필요"}
           </span>
-          <small>연결 전에는 업로드한 엑셀을 편집할 수 있어요</small>
+          <small>
+            {status?.connected
+              ? status.config?.label
+              : status?.connectionError ||
+                "사업 폴더 접근 권한을 확인하고 있습니다."}
+          </small>
         </div>
       </section>
       {error && (
@@ -193,11 +252,10 @@ export default function WorkspacePanel() {
           {notice}
         </p>
       )}
-      <section className="panel">
-        <div className="panelTitle">
-          <h2>관리할 폴더</h2>
-          <span className="badge">설정과 접근 권한은 별도</span>
-        </div>
+      <details className="panel">
+        <summary>
+          관리 폴더 설정 · {status?.config?.label || "연결 필요"}
+        </summary>
         <div className="driveConfig">
           <label>
             폴더 이름
@@ -249,12 +307,14 @@ export default function WorkspacePanel() {
           </button>
           <button
             className="secondary"
-            disabled={busy || !status?.connected || !status.config}
+            disabled={busy || indexing || !status?.connected || !status.config}
             onClick={() =>
               act(async () => {
-                await api("drive/index", {
+                let index = await api("drive/index", {
                   restart: !status?.index || status.index.complete,
                 });
+                while (!index.complete)
+                  index = await api("drive/index", { restart: false });
                 await refresh();
               })
             }
@@ -272,10 +332,10 @@ export default function WorkspacePanel() {
             </small>
           )}
         </div>
-      </section>
-      <section className="panel">
+      </details>
+      <section className="panel" aria-busy={loading || busy}>
         <div className="panelTitle">
-          <h2>Drive 파일</h2>
+          <h2>사업 폴더 · 파일 탐색</h2>
           <label className="inlineCheck">
             <input
               type="checkbox"
@@ -290,6 +350,19 @@ export default function WorkspacePanel() {
             현재 폴더 휴지통
           </label>
         </div>
+        <p className="hint" role="status">
+          {indexing
+            ? `검색 목록 준비 중 · ${status?.index?.count || 0}개 파일·폴더`
+            : status?.index?.complete
+              ? `전체 ${status.index.count}개 파일·폴더 검색 가능`
+              : "폴더를 선택하면 하위 구조를 바로 볼 수 있습니다."}
+        </p>
+        {indexError && (
+          <p className="banner error">
+            검색 목록 준비 실패: {indexError} · 관리 폴더 설정에서 다시 조사할
+            수 있습니다.
+          </p>
+        )}
         <nav className="breadcrumbs" aria-label="폴더 경로">
           {trail.map((f, i) => (
             <button
@@ -303,14 +376,20 @@ export default function WorkspacePanel() {
         </nav>
         <div className="toolbar">
           <input
-            aria-label="조사한 파일 이름 검색"
-            placeholder="조사한 파일 이름으로 검색"
+            aria-label="사업 폴더 전체 이름 검색"
+            placeholder="전체 폴더에서 기업명·파일명 검색"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !busy && status?.connected) {
+                e.preventDefault();
+                void act(() => search());
+              }
+            }}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <button
             className="secondary"
-            disabled={busy || !status?.connected}
+            disabled={busy || loading || !status?.connected}
             onClick={() => act(() => search())}
           >
             검색
@@ -328,7 +407,11 @@ export default function WorkspacePanel() {
             새 폴더
           </button>
         </div>
-        {!files.length ? (
+        {loading ? (
+          <div className="emptyState" role="status">
+            폴더와 파일을 불러오는 중…
+          </div>
+        ) : !files.length ? (
           <div className="emptyState">
             <span className="emptyIcon" aria-hidden="true">
               ▱
@@ -336,12 +419,18 @@ export default function WorkspacePanel() {
             <h3>
               {!status?.connected
                 ? "연결하면 실제 파일을 불러옵니다"
-                : "표시할 파일이 없습니다"}
+                : searchMode
+                  ? "검색 결과가 없습니다"
+                  : "빈 폴더입니다"}
             </h3>
             <p>
               {!status?.connected
                 ? "예시 파일이나 예상 건수를 실제 현황으로 표시하지 않습니다."
-                : "폴더를 열거나 조사한 파일을 검색해주세요."}
+                : searchMode
+                  ? indexing
+                    ? "검색 목록을 준비 중입니다. 잠시 후 다시 검색해주세요."
+                    : "다른 기업명이나 파일명으로 검색해보세요."
+                  : "상위 폴더로 이동하거나 새 폴더를 만들 수 있습니다."}
             </p>
           </div>
         ) : (
@@ -370,7 +459,7 @@ export default function WorkspacePanel() {
                               { id: f.id, name: f.name },
                             ]),
                           )
-                        : setEditor({ id: f.id, source: "drive" })
+                        : setEditor({ id: f.id })
                     }
                   >
                     {f.name}
@@ -487,94 +576,13 @@ export default function WorkspacePanel() {
           </div>
         )}
       </section>
-      <section className="panel">
-        <div className="panelTitle">
-          <h2>업로드한 엑셀 편집</h2>
-          <span className="badge">Drive 연결 없이 사용</span>
-        </div>
-        <p>
-          원본 파일의 셀을 읽고 수정합니다. 저장한 파일은 이 운영실에 보관되며
-          Drive 원본에는 반영되지 않습니다.
-        </p>
-        <label className="uploadBox">
-          보고서 XLSX 업로드
-          <input
-            type="file"
-            accept=".xlsx"
-            disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f)
-                act(async () => {
-                  const form = new FormData();
-                  form.set("file", f);
-                  const result = await api("workbooks/upload", form);
-                  await refresh();
-                  setEditor({ id: result.id, source: "local" });
-                });
-              e.target.value = "";
-            }}
-          />
-        </label>
-        {!locals.length && (
-          <p className="hint">아직 업로드한 파일이 없습니다.</p>
-        )}
-        {locals.map((f) => (
-          <article key={f.id} className="fileRow">
-            <span className="fileIcon" aria-hidden="true">
-              ▤
-            </span>
-            <div className="fileInfo">
-              <button
-                className="fileName"
-                onClick={() => setEditor({ id: f.id, source: "local" })}
-              >
-                {f.name}
-              </button>
-              <small>
-                업로드 사본 · {new Date(f.updatedAt).toLocaleString("ko-KR")}
-              </small>
-            </div>
-            <button
-              className="secondary"
-              onClick={() => setEditor({ id: f.id, source: "local" })}
-            >
-              편집
-            </button>
-            <button
-              className="secondary"
-              disabled={busy || !status?.connected || !parent}
-              onClick={() =>
-                act(async () => {
-                  await api("drive/propose", {
-                    command: {
-                      kind: "workbook.publish",
-                      parentId: parent,
-                      name: f.name,
-                      workbookId: f.id,
-                      version: f.version,
-                    },
-                    reason: "업로드한 엑셀을 현재 관리 폴더에 새 파일로 게시",
-                    requestId: crypto.randomUUID(),
-                  });
-                  setNotice("엑셀 게시 변경안을 작업 센터에 저장했습니다.");
-                })
-              }
-            >
-              Drive 게시
-            </button>
-          </article>
-        ))}
-      </section>
     </div>
   );
 }
 export function WorkbookEditor({
-  source,
   id,
   onClose,
 }: {
-  source: "drive" | "local";
   id: string;
   onClose: () => void;
 }) {
@@ -596,9 +604,7 @@ export function WorkbookEditor({
     sheet: string;
     mapping: Mapping;
   }): Promise<EditorData> {
-    return source === "local"
-      ? api("workbooks/read", { id, selected, preview: !!selected })
-      : api("drive/read", { fileId: id, selected, preview: !!selected });
+    return api("drive/read", { fileId: id, selected, preview: !!selected });
   }
   async function act(fn: () => Promise<void>) {
     setBusy(true);
@@ -618,9 +624,7 @@ export function WorkbookEditor({
       const d = await read();
       if (epoch !== requestEpoch.current) return;
       setData(d);
-      let profile = d.profile;
-      if (source === "drive")
-        profile = await api(`drive/profile?id=${encodeURIComponent(id)}`);
+      const profile = await api(`drive/profile?id=${encodeURIComponent(id)}`);
       if (epoch !== requestEpoch.current) return;
       const selected = {
         sheet: profile?.sheet || d.sheets[0]?.name || "",
@@ -638,7 +642,7 @@ export function WorkbookEditor({
     return () => {
       requestEpoch.current++;
     };
-  }, [id, source]);
+  }, [id]);
   async function load(selected = { sheet, mapping }) {
     const d = await read(selected);
     setData(d);
@@ -650,21 +654,15 @@ export function WorkbookEditor({
   async function save() {
     if (!readReady || !data) throw new Error("셀을 다시 읽어주세요.");
     const p = { sheet, mapping, version: data.version, before, after: values };
-    if (source === "local") {
-      await api("workbooks/save", { id, ...p });
-      await load();
-      setNotice("셀 저장과 생성 파일 검증을 마쳤습니다. 다운로드할 수 있어요.");
-    } else {
-      await api("drive/propose", {
-        command: { kind: "cells.update", fileId: id, ...p },
-        reason: "운영자가 보고서 편집 화면에서 검토한 셀 변경",
-        requestId: crypto.randomUUID(),
-      });
-      setNotice(
-        "셀 변경안을 작업 센터에 저장했습니다. 승인 후 Drive에 반영됩니다.",
-      );
-      setReview(false);
-    }
+    await api("drive/propose", {
+      command: { kind: "cells.update", fileId: id, ...p },
+      reason: "운영자가 보고서 편집 화면에서 검토한 셀 변경",
+      requestId: crypto.randomUUID(),
+    });
+    setNotice(
+      "셀 변경안을 작업 센터에 저장했습니다. 승인 후 Drive에 반영됩니다.",
+    );
+    setReview(false);
   }
   return (
     <div className="workspacePanel">
@@ -686,11 +684,7 @@ export function WorkbookEditor({
         <div>
           <span className="eyebrow">셀 기반 보고서 편집</span>
           <h2 className="editorTitle">{data?.file.name || "파일 읽는 중"}</h2>
-          <p>
-            {source === "local"
-              ? "업로드 사본 · 원본 양식 보존"
-              : "Drive 원본 · 승인 후 저장"}
-          </p>
+          <p>Drive 원본 · 승인 후 저장</p>
         </div>
       </section>
       {error && (
@@ -858,20 +852,18 @@ export function WorkbookEditor({
           >
             {busy ? "읽는 중…" : "지정한 셀 읽기"}
           </button>
-          {source === "drive" && (
-            <button
-              className="secondary"
-              disabled={busy || !readReady}
-              onClick={() =>
-                act(async () => {
-                  await api("drive/profile", { fileId: id, sheet, mapping });
-                  setNotice("이 파일의 매핑을 저장했습니다.");
-                })
-              }
-            >
-              매핑 저장
-            </button>
-          )}
+          <button
+            className="secondary"
+            disabled={busy || !readReady}
+            onClick={() =>
+              act(async () => {
+                await api("drive/profile", { fileId: id, sheet, mapping });
+                setNotice("이 파일의 매핑을 저장했습니다.");
+              })
+            }
+          >
+            매핑 저장
+          </button>
         </div>
       </details>
       {review && readReady && (
@@ -897,11 +889,11 @@ export function WorkbookEditor({
             ))}
           </div>
           <button className="primary" disabled={busy} onClick={() => act(save)}>
-            {source === "local" ? "확인한 셀 저장" : "변경안 저장"}
+            변경안 저장
           </button>
         </section>
       )}
-      {source === "drive" && data?.file.mimeType === XLSX && (
+      {data?.file.mimeType === XLSX && (
         <button
           className="secondary"
           disabled={busy}
@@ -912,23 +904,6 @@ export function WorkbookEditor({
           }
         >
           Drive에 저장된 XLSX 다운로드
-        </button>
-      )}
-      {source === "local" && (
-        <button
-          className="secondary"
-          disabled={busy || !data}
-          onClick={() =>
-            act(() =>
-              download(
-                "workbooks/download",
-                { id },
-                data?.file.name || "report.xlsx",
-              ),
-            )
-          }
-        >
-          저장된 XLSX 다운로드
         </button>
       )}
     </div>

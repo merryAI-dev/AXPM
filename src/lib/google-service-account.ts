@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { isEmulator, userDoc } from "./firebase";
+import { isEmulator } from "./firebase";
 const exec = promisify(execFile);
 let cached:
   { account: string; accessToken: string; expires: number } | undefined;
@@ -31,9 +31,8 @@ export function serviceAccountMode() {
   );
 }
 export async function driveServiceAccountClient(uid: string) {
-  const root = (
-    await userDoc(uid).collection("config").doc("drive").get()
-  ).data()?.rootId;
+  const { driveConfig } = await import("./workspace/drive");
+  const root = (await driveConfig(uid)).rootId;
   if (!root || root !== process.env.GOOGLE_SERVICE_ACCOUNT_ROOT_ID)
     throw new Error("서비스 계정에 허용된 관리 폴더 설정이 필요합니다.");
   const account = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!;
@@ -43,10 +42,13 @@ export async function driveServiceAccountClient(uid: string) {
     )
   )
     throw new Error("서비스 계정 이메일이 올바르지 않습니다.");
+  return refreshableServiceClient(() => serviceAccountToken(account));
+}
+async function serviceAccountToken(account: string) {
   if (
     !cached ||
     cached.account !== account ||
-    cached.expires < Date.now() + 120000
+    cached.expires < Date.now() + 300000
   ) {
     const source = await cloudAccessToken();
     const result = await fetch(
@@ -78,10 +80,15 @@ export async function driveServiceAccountClient(uid: string) {
       expires: Date.parse(token.expireTime),
     };
   }
-  const client = new google.auth.OAuth2();
-  client.setCredentials({
-    access_token: cached.accessToken,
-    expiry_date: cached.expires,
+  return { access_token: cached!.accessToken, expiry_date: cached!.expires };
+}
+export async function refreshableServiceClient(
+  getToken: () => Promise<{ access_token: string; expiry_date: number }>,
+) {
+  const client = new google.auth.OAuth2({
+    eagerRefreshThresholdMillis: 60_000,
   });
+  client.refreshHandler = getToken;
+  client.setCredentials(await getToken());
   return client;
 }

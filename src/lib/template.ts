@@ -97,7 +97,6 @@ export async function patchWorkbook(
         `<c${attrs} t="inlineStr"><is><t xml:space="preserve">${escapeXml(fields[field])}</t></is></c>`,
     );
   }
-  // Patch only mapped cell XML. All other ZIP members, drawings, styles and print settings remain untouched.
   zip.file(path, xml, { createFolders: false });
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }

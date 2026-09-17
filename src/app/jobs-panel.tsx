@@ -28,7 +28,6 @@ const labels: Record<string, string> = {
   rejected: "반려",
 };
 const kinds: Record<string, string> = {
-  "workbook.publish": "엑셀 Drive 게시",
   "folder.create": "폴더 생성",
   "file.copy": "파일 복사",
   "file.rename": "이름 변경",
@@ -49,11 +48,6 @@ export default function JobsPanel() {
   }
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
-    const timer = setInterval(
-      () => refresh().catch((e) => setError(e.message)),
-      5000,
-    );
-    return () => clearInterval(timer);
   }, []);
   async function act(fn: () => Promise<void>) {
     setBusy(true);

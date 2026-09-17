@@ -50,7 +50,7 @@ const kept = env
   .trimEnd();
 await writeFile(
   ".env.local",
-  `${kept}\nAGENT_ENGINE=hermes\nAGENT_PROVIDER=gemini\nAGENT_MODEL=${model}\nGEMINI_API_KEY=${key}\n`,
+  `${kept}\nAGENT_ENGINE=builtin\nAGENT_PROVIDER=gemini\nAGENT_MODEL=${model}\nGEMINI_API_KEY=${key}\n`,
   { mode: 0o600 },
 );
 await chmod(".env.local", 0o600);

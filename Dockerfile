@@ -12,13 +12,15 @@ ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID
 RUN npm run build
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.9.21 /uv /uvx /bin/
 ENV UV_PYTHON_INSTALL_DIR=/opt/python
-COPY vendor/hermes-agent /opt/hermes
-RUN --mount=type=cache,target=/root/.cache/uv uv venv --python 3.13 /opt/hermes/.venv \
-    && uv pip install --python /opt/hermes/.venv/bin/python -e '/opt/hermes[mcp]'
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=8080
-ENV HERMES_BIN=/opt/hermes/.venv/bin/hermes AGENT_ENGINE=hermes AGENT_PROVIDER=gemini
+COPY vendor/hermes-agent /opt/hermes-agent
+RUN uv venv --python 3.13 /opt/hermes-venv \
+    && uv pip install --python /opt/hermes-venv/bin/python -e '/opt/hermes-agent[mcp]'
+ENV AGENT_ENGINE=hermes AGENT_PROVIDER=gemini HERMES_BIN=/opt/hermes-venv/bin/hermes
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/scripts/worker.mjs ./scripts/worker.mjs

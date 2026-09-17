@@ -2,6 +2,7 @@ import { getApps, initializeApp, applicationDefault } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import { isAuthorizedEmail, workspaceUidFor } from "./access-policy";
 export function db() {
   if (!getApps().length)
     initializeApp({
@@ -36,21 +37,14 @@ export async function authenticate(request: Request) {
   } catch {
     throw new ApiError(401, "로그인이 만료되었습니다. 다시 로그인해주세요.");
   }
-  const allowed = (process.env.ALLOWED_EMAILS || "")
-    .split(",")
-    .map((x) => x.trim().toLowerCase())
-    .filter(Boolean);
-  if (
-    !isEmulator() &&
-    (!user.email_verified || !allowed.includes(user.email?.toLowerCase() || ""))
-  )
+  if (!isEmulator() && (!user.email_verified || !isAuthorizedEmail(user.email)))
     throw new ApiError(403, "허용된 운영 계정이 아닙니다.");
   if (request.method !== "GET") {
     const origin = request.headers.get("origin");
     if (origin && origin !== process.env.APP_ORIGIN)
       throw new ApiError(403, "허용되지 않은 요청 출처입니다.");
   }
-  return user;
+  return { ...user, uid: workspaceUidFor(user.uid) };
 }
 export class ApiError extends Error {
   constructor(

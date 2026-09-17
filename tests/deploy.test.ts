@@ -13,16 +13,27 @@ const config = {
   firebaseAuthDomain: "axpm-test-project.firebaseapp.com",
   storageBucket: "test-private-bucket",
   allowedEmails: ["operator@example.com"],
+  allowedDomains: [],
+  workspaceUid: "test-operator",
   secrets: {
-    TOKEN_ENCRYPTION_KEY: "token-key-name",
     CRON_SECRET: "cron-key-name",
+    GEMINI_API_KEY: "gemini-key-name",
   },
   workerUid: "test-operator",
   schedulerServiceAccount:
     "scheduler@axpm-test-project.iam.gserviceaccount.com",
-  env: {},
+  env: {
+    AXPM_PROGRAM_NAME: "Test Program",
+    AXPM_MASTER_SPREADSHEET_ID: "syntheticMaster123",
+    AXPM_MASTER_SHEET_ID: "1",
+    AXPM_MASTER_SHEET_TITLE: "Master",
+    AXPM_MASTER_DASHBOARD_RANGE: "J98:S130",
+    AXPM_DRIVE_ROOT_ID: "syntheticRoot123",
+    AXPM_REPORT_FOLDER_ID: "syntheticReports123",
+    AXPM_DEFAULT_CAMPUS: "Test Campus",
+  },
 };
-function plan(script: string, data = config) {
+function plan(script: string, data: Record<string, unknown> = config) {
   const dir = mkdtempSync(join(tmpdir(), "axpm-plan-test-"));
   try {
     const file = join(dir, "config.json");
@@ -49,7 +60,10 @@ test("deployment and worker plans run without gcloud or network and include boun
 test("deployment rejects emulator overrides instead of shipping a development auth configuration", () => {
   const rejected = plan("deploy.mjs", {
     ...config,
-    env: { FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080" },
+    env: {
+      ...config.env,
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080",
+    },
   });
   assert.notEqual(rejected.status, 0);
   assert.match(rejected.stderr, /overrides are forbidden/);

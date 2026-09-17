@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { userDoc } from "../firebase";
-import { workspace, type DriveWorkspace } from "./drive";
+import { driveConfig, workspace, type DriveWorkspace } from "./drive";
 import { FOLDER } from "./schema";
-// One page per invocation; checkpoint and rows are committed atomically.
 export async function indexStep(
   uid: string,
   restart = false,
@@ -69,12 +68,63 @@ export async function indexStep(
     await ref.firestore.runTransaction(async (tx) => {
       if ((await tx.get(ref)).data()?.claim !== claim)
         throw new Error("조사 작업이 교체되었습니다.");
-      for (const f of page.files)
+      const previous = page.files.length
+        ? await tx.getAll(
+            ...page.files.map((f) => base.collection("driveIndex").doc(f.id)),
+          )
+        : [];
+      for (const [i, f] of page.files.entries()) {
+        const before = previous[i]?.data();
+        const sameRoot = before?.rootId === ws.root;
+        const changed =
+          sameRoot &&
+          (before.version !== f.version ||
+            before.name !== f.name ||
+            JSON.stringify(before.parents) !== JSON.stringify(f.parents));
+        const recent =
+          Date.parse(f.modifiedTime || "") >= Date.now() - 86400000;
+        if (changed || (!sameRoot && recent)) {
+          const changes = changed
+            ? [
+                ...(before.name !== f.name ? ["이름 변경"] : []),
+                ...(JSON.stringify(before.parents) !== JSON.stringify(f.parents)
+                  ? ["위치 변경"]
+                  : []),
+                ...(before.version !== f.version ? ["파일 버전 변경"] : []),
+              ]
+            : ["최근 수정 · 최초 확인"];
+          const eventId = createHash("sha256")
+            .update(
+              JSON.stringify([ws.root, f.id, f.version, f.name, f.parents]),
+            )
+            .digest("hex");
+          tx.set(base.collection("driveHistory").doc(eventId), {
+            fileId: f.id,
+            name: f.name,
+            rootId: ws.root,
+            mimeType: f.mimeType,
+            modifiedTime: f.modifiedTime || "",
+            observedAt: next.updatedAt,
+            eventTime: changed ? next.updatedAt : f.modifiedTime,
+            version: f.version,
+            changes,
+            before: sameRoot
+              ? {
+                  name: before.name,
+                  parents: before.parents,
+                  version: before.version,
+                }
+              : null,
+            after: { name: f.name, parents: f.parents, version: f.version },
+          });
+        }
         tx.set(base.collection("driveIndex").doc(f.id), {
           ...f,
           generation: state.generation,
+          rootId: ws.root,
           indexedAt: next.updatedAt,
         });
+      }
       tx.set(ref, next);
     });
     return {
@@ -98,9 +148,7 @@ export async function indexStatus(uid: string) {
   const d = (
     await userDoc(uid).collection("private").doc("drive-index").get()
   ).data();
-  const config = (
-    await userDoc(uid).collection("config").doc("drive").get()
-  ).data();
+  const config = await driveConfig(uid);
   if (!d || d.rootId !== config?.rootId) return null;
   return {
     count: d.count,
@@ -116,10 +164,9 @@ export async function searchIndex(uid: string, query: string, cursor?: string) {
   const state = (
     await base.collection("private").doc("drive-index").get()
   ).data();
-  const config = (await base.collection("config").doc("drive").get()).data();
+  const config = await driveConfig(uid);
   if (!state || state.rootId !== config?.rootId)
     return { files: [], nextCursor: "", complete: false };
-  // Bounded index scan, explicitly paginated. Not advertised as full-text document search.
   let q = base.collection("driveIndex").orderBy("__name__").limit(200);
   if (cursor) q = q.startAfter(cursor);
   const page = await q.get();
@@ -138,5 +185,26 @@ export async function searchIndex(uid: string, query: string, cursor?: string) {
     nextCursor: page.size === 200 ? page.docs.at(-1)!.id : "",
     complete: state.complete,
     indexedAt: state.updatedAt,
+  };
+}
+
+export async function driveHistory(uid: string) {
+  const config = await driveConfig(uid);
+  const since = new Date(Date.now() - 86400000).toISOString();
+  const page = await userDoc(uid)
+    .collection("driveHistory")
+    .where("eventTime", ">=", since)
+    .orderBy("eventTime", "desc")
+    .limit(51)
+    .get();
+  const events = page.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((event: any) => event.rootId === config.rootId);
+  return {
+    events: events.slice(0, 50),
+    truncated: page.size > 50,
+    since,
+    checkedAt: new Date().toISOString(),
+    index: await indexStatus(uid),
   };
 }

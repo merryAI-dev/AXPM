@@ -1,4 +1,3 @@
-/** Serializable geometry shared by the authenticated reader and browser viewer. */
 export type ViewStyle = {
   fontFamily?: string;
   fontSize?: number;

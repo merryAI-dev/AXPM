@@ -3,6 +3,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { checkDeployment } from "./check-deployment.mjs";
 const args = process.argv.slice(2),
   apply = args.includes("--apply");
 const configPath = args.find((x) => !x.startsWith("--"));
@@ -14,22 +15,40 @@ const c = JSON.parse(readFileSync(configPath, "utf8"));
 for (const k of ["project", "region", "service", "serviceAccount"])
   if (!/^[a-z][a-z0-9-]{2,60}$/.test(c[k] || "") || c[k].includes("YOUR"))
     throw new Error(`Configure ${k}`);
+const allowedEmails = Array.isArray(c.allowedEmails) ? c.allowedEmails : [];
+const allowedDomains = Array.isArray(c.allowedDomains) ? c.allowedDomains : [];
 if (
-  !Array.isArray(c.allowedEmails) ||
-  !c.allowedEmails.length ||
-  c.allowedEmails.some((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+  (!allowedEmails.length && !allowedDomains.length) ||
+  allowedEmails.some((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) ||
+  allowedDomains.some(
+    (domain) => !/^(?!-)[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(domain),
+  )
 )
-  throw new Error("Configure exact allowedEmails");
+  throw new Error("Configure allowedEmails or allowedDomains");
+if (c.workspaceUid && !/^[A-Za-z0-9_-]{1,128}$/.test(c.workspaceUid))
+  throw new Error("Configure workspaceUid");
 for (const k of ["firebaseApiKey", "firebaseAuthDomain", "storageBucket"])
   if (!c[k] || c[k].includes("YOUR")) throw new Error(`Configure ${k}`);
-if (!c.secrets?.TOKEN_ENCRYPTION_KEY || !c.secrets?.CRON_SECRET)
-  throw new Error("Secret Manager names for encryption and cron are required");
+if (!c.secrets?.CRON_SECRET || !c.secrets?.GEMINI_API_KEY)
+  throw new Error("Secret Manager names for cron and Gemini are required");
+for (const key of [
+  "AXPM_PROGRAM_NAME",
+  "AXPM_MASTER_SPREADSHEET_ID",
+  "AXPM_MASTER_SHEET_ID",
+  "AXPM_MASTER_SHEET_TITLE",
+  "AXPM_MASTER_DASHBOARD_RANGE",
+  "AXPM_DRIVE_ROOT_ID",
+  "AXPM_REPORT_FOLDER_ID",
+  "AXPM_DEFAULT_CAMPUS",
+])
+  if (!c.env?.[key] || String(c.env[key]).includes("YOUR"))
+    throw new Error(`Configure ${key}`);
 for (const [k, v] of Object.entries(c.secrets))
   if (!/^[A-Z_]+$/.test(k) || !/^[\w-]+$/.test(v))
     throw new Error("Invalid secret name");
 if (
   Object.keys(c.env || {}).some((k) =>
-    /SECRET|TOKEN|KEY|EMULATOR|ALLOWED_EMAILS|APP_ORIGIN|FIREBASE_PROJECT_ID/.test(
+    /SECRET|TOKEN|KEY|EMULATOR|ALLOWED_EMAILS|ALLOWED_DOMAINS|APP_ORIGIN|FIREBASE_PROJECT_ID/.test(
       k,
     ),
   )
@@ -52,49 +71,18 @@ function run(args, capture = false) {
     throw new Error(`gcloud ${args.slice(0, 3).join(" ")} failed`);
   return capture ? r.stdout.trim() : "";
 }
-// Provision database, private bucket, Firebase Web app/Auth, runtime service account and billing first.
-// This script deliberately does not pick a billing account or create service account keys.
 const dir = mkdtempSync(join(tmpdir(), "axpm-deploy-"));
 try {
   if (apply) {
-    run(["projects", "describe", c.project, "--format=value(projectId)"], true);
-    const billing = run(
-      [
-        "billing",
-        "projects",
-        "describe",
-        c.project,
-        "--format=value(billingEnabled)",
-      ],
-      true,
-    );
-    if (billing.toLowerCase() !== "true")
-      throw new Error(
-        "Cloud Run 배포에는 선택한 결제 계정을 프로젝트에 연결해야 합니다. 이 스크립트는 결제 계정을 임의로 선택하지 않습니다.",
+    const readiness = await checkDeployment(c);
+    for (const check of readiness)
+      console.log(
+        `${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.detail}`,
       );
-    run(
-      [
-        "iam",
-        "service-accounts",
-        "describe",
-        account,
-        `--project=${c.project}`,
-      ],
-      true,
-    );
-    run(
-      [
-        "artifacts",
-        "repositories",
-        "describe",
-        "axpm",
-        `--location=${c.region}`,
-        `--project=${c.project}`,
-      ],
-      true,
-    );
-    for (const secret of Object.values(c.secrets))
-      run(["secrets", "describe", secret, `--project=${c.project}`], true);
+    if (readiness.some((check) => !check.ok))
+      throw new Error(
+        "배포 준비 항목을 먼저 완료해주세요. 빌드와 배포를 시작하지 않았습니다.",
+      );
   }
   run([
     "builds",
@@ -111,7 +99,9 @@ try {
     JSON.stringify({
       FIREBASE_PROJECT_ID: c.project,
       FIREBASE_STORAGE_BUCKET: c.storageBucket,
-      ALLOWED_EMAILS: c.allowedEmails.join(","),
+      ALLOWED_EMAILS: allowedEmails.join(","),
+      ALLOWED_DOMAINS: allowedDomains.join(","),
+      AXPM_WORKSPACE_UID: c.workspaceUid || "",
       ...c.env,
     }),
     { mode: 0o600 },
@@ -161,7 +151,7 @@ try {
     "--quiet",
   ]);
   console.log(
-    `Service: ${url}. Enable this domain in Firebase Auth. Configure the OAuth redirect only when reconnecting Google.`,
+    `Service: ${url}. Enable this domain in Firebase Auth.`,
   );
   if (c.workerUid)
     console.log(

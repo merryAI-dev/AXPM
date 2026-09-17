@@ -6,18 +6,30 @@
   "firebaseApiKey": "YOUR_PUBLIC_FIREBASE_WEB_API_KEY",
   "firebaseAuthDomain": "YOUR_PROJECT_ID.firebaseapp.com",
   "storageBucket": "YOUR_PRIVATE_STORAGE_BUCKET",
-  "allowedEmails": [
-    "operator@example.com"
-  ],
+  "allowedEmails": ["operator@example.com"],
+  "allowedDomains": ["example.com"],
+  "workspaceUid": "YOUR_FIREBASE_OPERATOR_UID",
   "secrets": {
-    "TOKEN_ENCRYPTION_KEY": "axpm-token-encryption",
     "CRON_SECRET": "axpm-cron",
-    "GEMINI_API_KEY": "axpm-gemini"
+    "GEMINI_API_KEY": "axpm-gemini",
+    "GOOGLE_OAUTH_CLIENT_SECRET": "axpm-google-oauth-client-secret",
+    "OAUTH_TOKEN_ENCRYPTION_KEY": "axpm-oauth-token-key"
   },
   "env": {
     "AGENT_ENGINE": "hermes",
     "AGENT_PROVIDER": "gemini",
-    "AGENT_MODEL": "YOUR_GEMINI_MODEL_ID"
+    "AGENT_MODEL": "YOUR_GEMINI_MODEL_ID",
+    "AXPM_PROGRAM_NAME": "YOUR_PROGRAM_NAME",
+    "AXPM_MASTER_SPREADSHEET_ID": "YOUR_MASTER_SPREADSHEET_ID",
+    "AXPM_MASTER_SHEET_ID": "YOUR_MASTER_TAB_ID",
+    "AXPM_MASTER_SHEET_TITLE": "YOUR_MASTER_TAB_TITLE",
+    "AXPM_MASTER_DASHBOARD_RANGE": "J98:S130",
+    "AXPM_DRIVE_ROOT_ID": "YOUR_DRIVE_ROOT_ID",
+    "AXPM_REPORT_FOLDER_ID": "YOUR_REPORT_FOLDER_ID",
+    "AXPM_DEFAULT_CAMPUS": "YOUR_DEFAULT_CAMPUS",
+    "AXPM_GMAIL_QUERY": "label:AXPM/첨부수집 has:attachment newer_than:30d",
+    "AXPM_GMAIL_ACCOUNT": "YOUR_INTAKE_ACCOUNT@example.com",
+    "GOOGLE_OAUTH_CLIENT_ID": "YOUR_WEB_OAUTH_CLIENT_ID"
   },
   "workerUid": "",
   "workerSchedule": "* * * * *",

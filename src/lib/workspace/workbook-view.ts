@@ -7,7 +7,6 @@ function colour(
   c?: Partial<ExcelJS.Color> & { indexed?: number },
 ): string | undefined {
   if (c?.argb && /^[\da-f]{8}$/i.test(c.argb)) return `#${c.argb.slice(2)}`;
-  // Office default theme; explicit RGB always takes precedence.
   const theme = [
     "FFFFFF",
     "000000",
@@ -66,7 +65,6 @@ export function workbookView(
   if (!s) throw new Error("시트를 찾을 수 없습니다.");
   let lastRow = 1,
     lastCol = 1;
-  // Ignore formatted but empty tails (the supplied template has 1,000 such rows).
   s.eachRow((row) =>
     row.eachCell((c) => {
       if (c.value !== null) {
@@ -104,7 +102,6 @@ export function workbookView(
     );
   lastRow = Math.min(lastRow, MAX_ROWS);
   lastCol = Math.min(lastCol, MAX_COLS);
-  // Image anchors may extend beyond the text region. Keep a bounded full-sheet canvas.
   const colWidths = Array.from({ length: MAX_COLS }, (_, i) =>
     s.getColumn(i + 1).hidden
       ? 0
@@ -214,7 +211,6 @@ export function workbookView(
       warnings.push("그림 미리보기 용량을 초과했습니다.");
       break;
     }
-    // Excel drawing anchors use EMU offsets, not fractions of CSS cell sizes.
     type Anchor = {
       nativeCol: number;
       nativeRow: number;
@@ -250,7 +246,6 @@ export function workbookView(
   view.rows = rowHeights
     .map((height, i) => ({ number: i + 1, y: ys[i], height }))
     .filter((r) => r.y < view.height);
-  // Focus on mapped report columns, preserving every row and photo in that area.
   const mapped = mapping.map((f) => s.getCell(f.cell));
   if (mapped.length) {
     let left = Math.min(...mapped.map((c) => Number(c.col))),

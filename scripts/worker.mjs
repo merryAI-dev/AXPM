@@ -51,3 +51,27 @@ if (data.idle && process.env.AXPM_MONITOR_WORKSPACE === "true") {
     }),
   );
 }
+
+if (process.env.AXPM_MONITOR_REPORTS === "true") {
+  const response = await fetch(new URL("/api/cron", AXPM_BASE_URL), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${CRON_SECRET}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ uid: AXPM_WORKER_UID, scope: "reports" }),
+    signal: AbortSignal.timeout(300000),
+  });
+  if (!response.ok)
+    throw new Error(`Report monitor failed: HTTP ${response.status}`);
+  const report = await response.json();
+  console.log(
+    JSON.stringify({
+      reportMonitor: true,
+      processed: report.processed,
+      totalFiles: report.totalFiles,
+      complete: report.complete,
+      skipped: report.skipped,
+    }),
+  );
+}

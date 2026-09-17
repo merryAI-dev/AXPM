@@ -1,33 +1,19 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { geminiApiKey } from "./gemini-key";
+
 export function agentRuntime() {
-  const engine = process.env.AGENT_ENGINE || "hermes";
+  const engine = process.env.AGENT_ENGINE || "builtin";
   const provider = process.env.AGENT_PROVIDER || "gemini";
   const model = process.env.AGENT_MODEL || "";
-  if (engine === "hermes")
-    return {
-      engine,
-      provider,
-      model,
-      configured:
-        provider === "gemini" &&
-        !!model &&
-        !!process.env.GEMINI_API_KEY &&
-        !!process.env.HERMES_BIN,
-    };
+  const validEngine = engine === "builtin" || engine === "hermes";
   return {
     engine,
     provider,
     model,
     configured:
-      engine === "builtin" &&
+      validEngine &&
+      provider === "gemini" &&
       !!model &&
-      (provider === "vertex"
-        ? !!(process.env.VERTEX_PROJECT_ID || process.env.FIREBASE_PROJECT_ID)
-        : provider === "anthropic" && !!process.env.ANTHROPIC_API_KEY),
+      !!geminiApiKey() &&
+      (engine !== "hermes" || !!process.env.HERMES_BIN),
   };
-}
-export function agentClient() {
-  if (!agentRuntime().configured)
-    throw new Error("에이전트 모델과 제공자 연결 설정이 필요합니다.");
-  return new Anthropic({ timeout: 60000, maxRetries: 1 });
 }

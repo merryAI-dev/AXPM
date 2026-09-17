@@ -59,7 +59,6 @@ export function nativeSheetView(
           v.effectiveValue?.stringValue ??
           v.effectiveValue?.numberValue ??
           "";
-        // Empty cells with styles must not inflate the used region.
         if (cell.value === "") cell.value = null;
         if (v.userEnteredValue?.formulaValue)
           cell.value = {
