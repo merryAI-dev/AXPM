@@ -57,8 +57,8 @@ export default function MasterStatus({ visible }: { visible: boolean }) {
         </span>
       </div>
       <p className="hint">
-        {product?.masterSheetTitle || "사업관리 마스터"}의 완료 체크박스와 보고서 작성일을 기준으로
-        집계합니다.
+        {product?.masterSheetTitle || "사업관리 마스터"}의 완료 체크박스와
+        보고서 작성일을 기준으로 집계합니다.
       </p>
       {error && (
         <p className="error" role="alert">
@@ -93,32 +93,35 @@ export default function MasterStatus({ visible }: { visible: boolean }) {
             <summary>
               기업별 완료 회차 · {status.companies.length}개 기업
             </summary>
-            <table>
-              <thead>
-                <tr>
-                  <th>기업</th>
-                  <th>멘토</th>
-                  <th>전담 완료</th>
-                  <th>특화 완료</th>
-                  <th>마스터 행</th>
-                </tr>
-              </thead>
-              <tbody>
-                {status.companies.map((c) => (
-                  <tr key={c.row}>
-                    <td>{c.company}</td>
-                    <td>{c.mentor}</td>
-                    <td>{c.completedRounds.join(", ") || "없음"}</td>
-                    <td>{c.specialtyComplete ? "완료" : "미완료"}</td>
-                    <td>{c.row}</td>
+            <div className="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>기업</th>
+                    <th>멘토</th>
+                    <th>전담 완료</th>
+                    <th>특화 완료</th>
+                    <th>마스터 행</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {status.companies.map((c) => (
+                    <tr key={c.row}>
+                      <td>{c.company}</td>
+                      <td>{c.mentor}</td>
+                      <td>{c.completedRounds.join(", ") || "없음"}</td>
+                      <td>{c.specialtyComplete ? "완료" : "미완료"}</td>
+                      <td>{c.row}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </details>
         </>
       )}
       <a
+        className="textButton"
         href={product?.masterUrl || "#"}
         target="_blank"
         rel="noreferrer"

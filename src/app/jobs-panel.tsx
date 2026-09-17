@@ -70,11 +70,7 @@ export default function JobsPanel() {
       <section className="workspaceHero">
         <div>
           <span className="eyebrow">작업과 승인</span>
-          <h2>
-            무엇을 바꾸는지,
-            <br />
-            결과까지 확인하세요
-          </h2>
+          <h2>무엇을 바꾸는지, 결과까지 확인하세요</h2>
           <p>
             에이전트와 운영자의 변경안을 함께 관리합니다. 외부 변경은 승인 후
             실행해요.
@@ -127,7 +123,20 @@ export default function JobsPanel() {
                 <small>{new Date(j.createdAt).toLocaleString("ko-KR")}</small>
                 <h2>{kinds[j.command?.kind || j.kind] || j.kind}</h2>
               </div>
-              <span className={`badge ${j.status === "done" ? "green" : ""}`}>
+              <span
+                className={`badge ${
+                  (
+                    {
+                      done: "green",
+                      pending: "blue",
+                      queued: "blue",
+                      running: "blue",
+                      uncertain: "amber",
+                      failed: "red",
+                    } as Record<string, string>
+                  )[j.status] || ""
+                }`}
+              >
                 {labels[j.status] || j.status}
               </span>
             </div>
