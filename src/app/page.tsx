@@ -27,6 +27,13 @@ const tabs = [
   { id: "settings", name: "시트 · 연결 설정", icon: "⚙" },
 ];
 const kindName = (k: string) => (k === "dedicated" ? "전담" : "특화");
+const proposalStatus: Record<string, [string, string]> = {
+  pending: ["승인 대기", "blue"],
+  executing: ["실행 중", "blue"],
+  done: ["실행 완료", "green"],
+  rejected: ["거절", ""],
+  uncertain: ["결과 확인 필요", "amber"],
+};
 export default function Home() {
   const [user, setUser] = useState<User | null>(null),
     [loaded, setLoaded] = useState(false),
@@ -66,6 +73,11 @@ export default function Home() {
       }),
     [],
   );
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
   useEffect(() => {
     if (!agentBusy) return;
     const timer = setInterval(() => refresh().catch(() => {}), 5000);
@@ -235,10 +247,7 @@ export default function Home() {
       </aside>
       <main className="main">
         <header>
-          <div>
-            <span className="eyebrow">OPERATIONS WORKSPACE</span>
-            <h1>{tabs.find((t) => t.id === tab)?.name}</h1>
-          </div>
+          <h1>{tabs.find((t) => t.id === tab)?.name}</h1>
           <button
             className="secondary"
             disabled={!!busy || !config?.sheetUrls.mentor}
@@ -395,7 +404,7 @@ export default function Home() {
                           </td>
                           <td>
                             <span
-                              className={`badge ${c.specialty ? "green" : ""}`}
+                              className={`badge ${c.specialty ? "green" : c.assigned || c.requested ? "blue" : ""}`}
                             >
                               {c.specialty
                                 ? `${c.specialtyCount}건 완료 표시`
@@ -532,7 +541,11 @@ export default function Home() {
                               ? "Gmail 발송"
                               : "Calendar 일정 초대"}
                         </span>
-                        <small>{p.status}</small>
+                        <span
+                          className={`badge ${proposalStatus[p.status]?.[1] || ""}`}
+                        >
+                          {proposalStatus[p.status]?.[0] || p.status}
+                        </span>
                       </div>
                       <h3>{p.title}</h3>
                       <p>{p.reason}</p>
@@ -1051,8 +1064,8 @@ export default function Home() {
                 "전담·특화 진행 횟수와 이번 주 일정을 보고해줘",
                 "남은 티켓을 조정하고 싶어",
               ].map((p) => (
-                <button key={p} onClick={() => setGoal(p)}>
-                  {p} ↗
+                <button key={p} type="button" onClick={() => setGoal(p)}>
+                  {p}
                 </button>
               ))}
             </div>

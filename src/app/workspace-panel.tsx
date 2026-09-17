@@ -169,11 +169,7 @@ export default function WorkspacePanel() {
       <section className="workspaceHero">
         <div>
           <span className="eyebrow">사업 운영 워크스페이스</span>
-          <h2>
-            파일을 찾고,
-            <br />
-            다음 업무로 이어가세요
-          </h2>
+          <h2>파일을 찾고, 다음 업무로 이어가세요</h2>
           <p>기존 Drive는 그대로 사용하고, 필요한 변경은 확인한 뒤 반영해요.</p>
         </div>
         <div className="connectionMark">
